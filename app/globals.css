@@ -183,6 +183,20 @@ table tbody tr {
   transition: background-color 0.12s ease;
 }
 
+/* Scanner page — animated scan-line */
+@keyframes scanline {
+  0%   { top: 4px;   opacity: 1; }
+  45%  { top: calc(100% - 4px); opacity: 1; }
+  50%  { top: calc(100% - 4px); opacity: 0; }
+  55%  { top: 4px;   opacity: 0; }
+  60%  { top: 4px;   opacity: 1; }
+  100% { top: 4px;   opacity: 1; }
+}
+
+/* Safe-area helpers for edge-to-edge scanner */
+.pt-safe-top  { padding-top: env(safe-area-inset-top, 0px); }
+.pb-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
 /* Keep the dashboard comfortable for users who request less motion. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

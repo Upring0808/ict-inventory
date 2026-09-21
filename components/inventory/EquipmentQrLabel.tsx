@@ -44,50 +44,67 @@ export function EquipmentQrLabel({ item }: EquipmentQrLabelProps) {
       qrImage.src = qrDataUrl;
     });
 
+    // A compact, near-square label: QR first, with a concise asset identity strip.
+    const W = 1000;
+    const H = 1000;
     const canvas = document.createElement('canvas');
-    canvas.width = 900;
-    canvas.height = 1180;
-    const context = canvas.getContext('2d');
-    if (!context) return;
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    const drawCentered = (text: string, y: number, font: string, color: string, maxWidth = 800) => {
-      context.font = font;
-      context.fillStyle = color;
-      let renderedText = text || 'Not recorded';
-      while (context.measureText(renderedText).width > maxWidth && renderedText.length > 1) {
-        renderedText = `${renderedText.slice(0, -2)}…`;
+    // Helper: draw centered text with overflow ellipsis
+    const drawCentered = (text: string, y: number, font: string, color: string, maxWidth = 920) => {
+      ctx.font = font;
+      ctx.fillStyle = color;
+      let rendered = text || 'Not recorded';
+      while (ctx.measureText(rendered).width > maxWidth && rendered.length > 1) {
+        rendered = `${rendered.slice(0, -2)}\u2026`;
       }
-      context.fillText(renderedText, canvas.width / 2, y);
+      ctx.fillText(rendered, W / 2, y);
     };
 
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    const headerGradient = context.createLinearGradient(0, 0, canvas.width, 0);
-    headerGradient.addColorStop(0, '#15803d');
-    headerGradient.addColorStop(1, '#1d4ed8');
-    context.fillStyle = headerGradient;
-    context.fillRect(0, 0, canvas.width, 168);
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
 
-    context.textAlign = 'center';
-    drawCentered('PENRO BATANES', 63, '700 34px Arial, sans-serif', '#ffffff');
-    drawCentered('ICT ASSET VERIFICATION LABEL', 108, '700 18px Arial, sans-serif', '#dbeafe');
-    drawCentered('DENR · REGION 2', 139, '600 14px Arial, sans-serif', '#dcfce7');
+    // A deliberately quiet header keeps the label useful at small print sizes.
+    const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
+    headerGrad.addColorStop(0, '#14532d');
+    headerGrad.addColorStop(1, '#1e3a8a');
+    ctx.fillStyle = headerGrad;
+    ctx.fillRect(0, 0, W, 76);
 
-    context.drawImage(qrImage, 160, 205, 580, 580);
-    context.strokeStyle = '#d4d4d8';
-    context.lineWidth = 2;
-    context.strokeRect(160, 205, 580, 580);
+    ctx.textAlign = 'center';
+    drawCentered('PENRO BATANES  \u00B7  ICT EQUIPMENT', 47, '700 23px Arial, sans-serif', '#ffffff');
 
-    drawCentered('PROPERTY NUMBER', 842, '700 15px Arial, sans-serif', '#64748b');
-    drawCentered(item.propertyNumber, 885, '700 30px monospace', '#111827');
-    drawCentered('SERIAL NUMBER', 940, '700 15px Arial, sans-serif', '#64748b');
-    drawCentered(item.serialNumber || 'Not recorded', 975, '600 20px monospace', '#1f2937');
-    drawCentered('EQUIPMENT MODEL', 1032, '700 15px Arial, sans-serif', '#64748b');
-    drawCentered(`${item.brand} ${item.model}`.trim(), 1067, '700 22px Arial, sans-serif', '#111827');
+    // QR code
+    const QR_SIZE = 630;
+    const QR_X = (W - QR_SIZE) / 2;
+    const QR_Y = 94;
+    ctx.drawImage(qrImage, QR_X, QR_Y, QR_SIZE, QR_SIZE);
+    ctx.strokeStyle = '#d4d4d8';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(QR_X, QR_Y, QR_SIZE, QR_SIZE);
 
-    context.fillStyle = '#f1f5f9';
-    context.fillRect(0, 1110, canvas.width, 70);
-    drawCentered('Scan to review and verify this equipment on site', 1153, '600 16px Arial, sans-serif', '#475569');
+    // Asset identity strip — property and serial are deliberately larger than the model.
+    const STRIP_Y = 742;
+    ctx.strokeStyle = '#e4e4e7';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(40, STRIP_Y);
+    ctx.lineTo(W - 40, STRIP_Y);
+    ctx.stroke();
+
+    const modelStr = `${item.brand} ${item.model}`.trim();
+    const serialStr = item.serialNumber || 'Not recorded';
+
+    drawCentered('PROPERTY NUMBER', STRIP_Y + 28, '700 13px Arial, sans-serif', '#6b7280');
+    drawCentered(item.propertyNumber, STRIP_Y + 70, '700 34px "Courier New", monospace', '#111827');
+    drawCentered('SERIAL NUMBER', STRIP_Y + 109, '700 13px Arial, sans-serif', '#6b7280');
+    drawCentered(serialStr, STRIP_Y + 148, '700 27px "Courier New", monospace', '#1d4ed8');
+    drawCentered('MODEL', STRIP_Y + 187, '700 13px Arial, sans-serif', '#6b7280');
+    drawCentered(modelStr, STRIP_Y + 226, '700 23px Arial, sans-serif', '#374151');
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) return;
@@ -115,7 +132,7 @@ export function EquipmentQrLabel({ item }: EquipmentQrLabelProps) {
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700 dark:text-blue-300">Equipment QR</p>
           <p className="mt-1 text-xs font-semibold text-zinc-800 dark:text-zinc-100">Scan to check and confirm on site</p>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">The mobile screen records a dated verification only after the reviewer approves the displayed details.</p>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">Square PNG with large property, serial, and model details.</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <button onClick={handleDownload} disabled={!qrDataUrl} className="rounded-lg bg-zinc-900 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-50 dark:bg-white dark:text-zinc-900">
               Download PNG

@@ -8,9 +8,10 @@ interface StatusBadgeProps {
   rawStatus?: string;
   remarks?: string;
   size?: 'sm' | 'md';
+  showRemark?: boolean;
 }
 
-export function StatusBadge({ category, rawStatus, remarks, size = 'md' }: StatusBadgeProps) {
+export function StatusBadge({ category, rawStatus, remarks, size = 'md', showRemark = true }: StatusBadgeProps) {
   let badgeStyle = '';
   let dotColor = '';
 
@@ -49,16 +50,16 @@ export function StatusBadge({ category, rawStatus, remarks, size = 'md' }: Statu
   const padding = size === 'sm' ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs';
 
   return (
-    <div className="inline-flex flex-col gap-0.5">
+    <div className="inline-flex max-w-full flex-col gap-1">
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full border font-medium ${badgeStyle} ${padding}`}
+        className={`inline-flex max-w-full self-start items-center gap-1.5 rounded-full border font-medium ${badgeStyle} ${padding}`}
         title={remarks || rawStatus || category}
       >
-        <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-        <span className="truncate max-w-[140px]">{category}</span>
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotColor}`} />
+        <span className="min-w-0 truncate">{category}</span>
       </span>
-      {remarks && (
-        <span className="text-[11px] text-zinc-500 dark:text-zinc-400 italic truncate max-w-[180px]">
+      {showRemark && remarks && (
+        <span className="max-w-full truncate text-[11px] leading-4 text-zinc-500 dark:text-zinc-400" title={remarks}>
           {remarks}
         </span>
       )}

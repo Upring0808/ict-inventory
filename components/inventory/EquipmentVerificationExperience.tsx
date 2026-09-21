@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { InventoryItem } from '@/types/inventory';
 import { findItemByPropertyNumber, recordQrVerification } from '@/lib/inventoryService';
 import { StatusBadge } from './StatusBadge';
@@ -17,29 +18,46 @@ function formatDate(value?: string) {
     : new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
+/** Detect obviously outdated OS versions */
+function isOutdatedOs(os?: string): boolean {
+  if (!os) return false;
+  const lower = os.toLowerCase();
+  return (
+    lower.includes('windows xp') ||
+    lower.includes('windows vista') ||
+    lower.includes('windows 7') ||
+    lower.includes('windows 8') ||
+    // Windows 10 has reached end-of-support in Oct 2025
+    lower.includes('windows 10')
+  );
+}
+
 function ReviewField({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="rounded-xl border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/70">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{label}</p>
-      <p className="mt-1 break-words text-sm font-semibold text-zinc-800 dark:text-zinc-100">{value || '—'}</p>
+    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/60">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-zinc-900 dark:text-zinc-50">{value || '—'}</p>
     </div>
   );
 }
 
 export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVerificationExperienceProps) {
+  const router = useRouter();
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [verifierName, setVerifierName] = useState('');
   const [verificationComment, setVerificationComment] = useState('');
   const [confirmed, setConfirmed] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     const load = async () => {
       setIsLoading(true);
-      setMessage(null);
+      setSuccessMessage(null);
+      setErrorMessage(null);
       setConfirmed(false);
       const found = propertyNumber ? await findItemByPropertyNumber(propertyNumber) : null;
       if (active) {
@@ -54,33 +72,49 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
   const handleVerify = async () => {
     if (!item || !confirmed || isSaving) return;
     setIsSaving(true);
-    setMessage(null);
+    setSuccessMessage(null);
+    setErrorMessage(null);
     try {
       const updated = await recordQrVerification(item, verifierName, verificationComment);
       setItem(updated);
       setConfirmed(false);
       setVerificationComment('');
-      setMessage('Verification recorded. This equipment is now marked as reviewed.');
+      setSuccessMessage('Verification recorded! Returning to scanner…');
+      // Redirect back to scanner after a short delay so the user sees the success message
+      setTimeout(() => {
+        router.push('/scanner');
+      }, 1600);
     } catch {
-      setMessage('We could not save the verification. Please check your connection and try again.');
+      setErrorMessage('We could not save the verification. Please check your connection and try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
   const isComputer = item?.equipmentType === 'Desktop Computers' || item?.equipmentType === 'Laptop Computers';
+  const outdatedOs = isComputer && isOutdatedOs(item?.osInstalled);
 
   return (
     <main className="min-h-screen bg-[#f7faf9] px-4 py-5 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50 sm:py-8">
       <div className="mx-auto w-full max-w-xl">
-        <header className="mb-5 flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-green-600 to-blue-600 text-white shadow-lg shadow-blue-500/20">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3Zm0 0h3a3 3 0 1 0 0-6 3 3 0 0 0-2.83 2M3 20a6 6 0 0 1 12 0v1H3v-1Zm12.5-3.5a4.5 4.5 0 0 1 5.5 4.38V21h-4" /></svg>
+        <header className="mb-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-green-600 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3Zm0 0h3a3 3 0 1 0 0-6 3 3 0 0 0-2.83 2M3 20a6 6 0 0 1 12 0v1H3v-1Zm12.5-3.5a4.5 4.5 0 0 1 5.5 4.38V21h-4" /></svg>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">PENRO Batanes · ICT Inventory</p>
+              <h1 className="text-lg font-bold tracking-tight">Equipment verification</h1>
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">PENRO Batanes · ICT Inventory</p>
-            <h1 className="text-lg font-bold tracking-tight">Equipment verification</h1>
-          </div>
+          {/* Back to scanner shortcut */}
+          <a
+            href="/scanner"
+            className="flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/60"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z" /></svg>
+            Scanner
+          </a>
         </header>
 
         {isLoading ? (
@@ -99,29 +133,54 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
           </section>
         ) : (
           <div className="space-y-4">
+            {/* ── Equipment identity card ── */}
             <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="bg-gradient-to-r from-green-600 to-blue-600 p-5 text-white">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider">{item.equipmentType}</span>
-                  <StatusBadge category={item.statusCategory} rawStatus={item.status} remarks={item.remarks} size="sm" />
+                  <span className="rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider">{item.equipmentType}</span>
+                  <div className="flex items-center gap-2">
+                    {outdatedOs && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-950">
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                        Outdated OS
+                      </span>
+                    )}
+                    <StatusBadge category={item.statusCategory} rawStatus={item.status} remarks={item.remarks} size="sm" showRemark={false} />
+                  </div>
                 </div>
                 <h2 className="mt-4 text-xl font-bold tracking-tight">{item.model}</h2>
                 <p className="mt-0.5 text-sm text-white/80">{item.brand}</p>
                 <p className="mt-4 font-mono text-sm font-bold tracking-wide">{item.propertyNumber}</p>
               </div>
+
+              {/* Outdated OS warning banner */}
+              {outdatedOs && (
+                <div className="flex items-start gap-3 border-b border-amber-200 bg-amber-50 px-5 py-3.5 dark:border-amber-900/50 dark:bg-amber-950/40">
+                  <svg className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /></svg>
+                  <div>
+                    <p className="text-sm font-bold text-amber-800 dark:text-amber-200">Outdated / Unsupported OS Detected</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                      <span className="font-semibold">{item.osInstalled}</span> is no longer receiving security updates. Flag this unit for OS upgrade during verification.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3 p-4">
                 <ReviewField label="Serial number" value={item.serialNumber} />
                 <ReviewField label="Office / division" value={item.location} />
                 <ReviewField label="Accountable person" value={item.accountablePersonnel} />
-                <ReviewField label="PMS date" value={item.datePmsConducted} />
+                <ReviewField label="PMS conducted" value={item.datePmsConducted} />
+                <ReviewField label="Last verified" value={formatDate(item.lastVerifiedAt)} />
               </div>
-              {item.remarks && <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"><span className="font-bold">Maintenance note: </span>{item.remarks}</div>}
+              {item.remarks && <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"><span className="font-bold">Maintenance note: </span>{item.remarks}</div>}
             </section>
 
+            {/* ── Asset, custody & condition ── */}
             <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="mb-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Record details</p>
-                <h3 className="mt-0.5 text-sm font-bold">Asset, custody & condition</h3>
+                <h3 className="mt-0.5 text-sm font-bold text-zinc-900 dark:text-zinc-50">Asset, custody &amp; condition</h3>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <ReviewField label="Year acquired" value={item.yearAcquired} />
@@ -133,11 +192,12 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
               </div>
             </section>
 
+            {/* ── Technical details (computers only) ── */}
             {isComputer && (
               <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="mb-3">
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Technical details</p>
-                  <h3 className="mt-0.5 text-sm font-bold">Hardware & software</h3>
+                  <h3 className="mt-0.5 text-sm font-bold text-zinc-900 dark:text-zinc-50">Hardware &amp; software</h3>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <ReviewField label="Computer name" value={item.computerName} />
@@ -145,43 +205,86 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
                   <ReviewField label="Processor" value={item.processor} />
                   <ReviewField label="RAM" value={item.ram} />
                   <ReviewField label="Graphics / GPU" value={item.gpu} />
-                  <ReviewField label="Operating system" value={item.osInstalled} />
+                  <div className={`rounded-xl border p-3 ${outdatedOs ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/60'}`}>
+                    <p className={`text-[10px] font-bold uppercase tracking-wider ${outdatedOs ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-500 dark:text-zinc-400'}`}>Operating system</p>
+                    <p className={`mt-1 break-words text-sm font-semibold ${outdatedOs ? 'text-amber-900 dark:text-amber-100' : 'text-zinc-900 dark:text-zinc-50'}`}>{item.osInstalled || '—'}</p>
+                    {outdatedOs && <p className="mt-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">⚠ Needs upgrade</p>}
+                  </div>
                   <ReviewField label="Office software" value={item.officeProductivityProduct} />
                   <ReviewField label="Endpoint protection" value={item.endpointProtection} />
                 </div>
               </section>
             )}
 
+            {/* ── Approval form ── */}
             <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex gap-3">
                 <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="m5 13 4 4L19 7" /></svg>
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold">Confirm the details on site</h3>
-                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">Only approve when the physical equipment, its assigned location, and the details above match.</p>
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Confirm the details on site</h3>
+                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">Only approve when the physical equipment, its assigned location, and the details above match.</p>
                 </div>
               </div>
 
-              <label className="mt-4 block text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">Verified by <span className="font-normal text-zinc-400">optional</span></label>
-              <input value={verifierName} onChange={(event) => setVerifierName(event.target.value)} placeholder="Your name or initials" className="mt-1.5 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+              <label className="mt-4 block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">Verified by <span className="font-normal text-zinc-400">optional</span></label>
+              <input
+                value={verifierName}
+                onChange={(e) => setVerifierName(e.target.value)}
+                placeholder="Your name or initials"
+                className="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              />
 
-              <label className="mt-4 block text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">Verification comment <span className="font-normal text-zinc-400">optional</span></label>
-              <textarea value={verificationComment} onChange={(event) => setVerificationComment(event.target.value)} rows={3} maxLength={500} placeholder="Add an observation, issue, or note from this on-site check." className="mt-1.5 w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+              <label className="mt-4 block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">Verification comment <span className="font-normal text-zinc-400">optional</span></label>
+              <textarea
+                value={verificationComment}
+                onChange={(e) => setVerificationComment(e.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="Add an observation, issue, or note from this on-site check."
+                className="mt-1.5 w-full resize-none rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
+              />
 
-              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">
-                <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500" />
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                />
                 <span>I have checked this physical equipment and confirm that the displayed details are accurate.</span>
               </label>
 
-              <button onClick={handleVerify} disabled={!confirmed || isSaving} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-4 py-3 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition hover:from-green-500 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-45">
-                {isSaving ? 'Saving verification…' : 'Approve & record verification'}
+              <button
+                onClick={handleVerify}
+                disabled={!confirmed || isSaving}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-4 py-3.5 text-sm font-bold text-white shadow-md shadow-blue-500/20 transition hover:from-green-500 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {isSaving ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                    Saving verification…
+                  </>
+                ) : (
+                  'Approve & record verification'
+                )}
               </button>
-              {message && <p className={`mt-3 rounded-xl p-3 text-xs font-medium ${message.startsWith('Verification') ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200'}`} role="status">{message}</p>}
+
+              {successMessage && (
+                <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200" role="status">
+                  <svg className="h-4 w-4 shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="m5 13 4 4L19 7" /></svg>
+                  {successMessage}
+                </div>
+              )}
+              {errorMessage && (
+                <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-200" role="alert">{errorMessage}</p>
+              )}
             </section>
 
-            <p className="px-2 text-center text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">Last verified: {formatDate(item.lastVerifiedAt)}{item.lastVerifiedBy ? ` by ${item.lastVerifiedBy}` : ''} · {item.verificationCount || 0} QR confirmation{item.verificationCount === 1 ? '' : 's'}</p>
-            <p className="px-2 text-center text-[10px] text-zinc-400 dark:text-zinc-600">Last updated by approved QR: {formatDate(item.updatedAt)}</p>
+            <p className="px-2 text-center text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+              Last verified: {formatDate(item.lastVerifiedAt)}{item.lastVerifiedBy ? ` by ${item.lastVerifiedBy}` : ''} · {item.verificationCount || 0} QR confirmation{item.verificationCount === 1 ? '' : 's'}
+            </p>
           </div>
         )}
       </div>

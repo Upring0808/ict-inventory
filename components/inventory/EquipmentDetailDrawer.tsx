@@ -70,10 +70,10 @@ export function EquipmentDetailDrawer({
   return (
     /* Backdrop — z-50 */
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center sm:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex w-full max-w-2xl flex-col max-h-[92vh] rounded-2xl border border-zinc-200/80 bg-zinc-50 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-label="Equipment details" className="flex max-h-[94svh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-zinc-200/80 bg-zinc-50 shadow-2xl animate-in slide-in-from-bottom-5 duration-200 dark:border-zinc-800 dark:bg-zinc-950 sm:max-h-[92vh] sm:rounded-2xl sm:zoom-in-95">
 
         {/* ── Header ── */}
         <div className="flex items-start justify-between gap-4 border-b border-zinc-200/80 bg-white px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900/80">
@@ -97,6 +97,7 @@ export function EquipmentDetailDrawer({
                 rawStatus={item.status}
                 remarks={item.remarks}
                 size="sm"
+                showRemark={false}
               />
             </div>
             <h3 className="mt-1.5 text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50 truncate">

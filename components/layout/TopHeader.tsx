@@ -13,7 +13,6 @@ interface TopHeaderProps {
   onExportCsv: () => void;
   onRefresh: () => void;
   isRefreshing?: boolean;
-  onOpenQrScanner: () => void;
 }
 
 export function TopHeader({
@@ -26,7 +25,6 @@ export function TopHeader({
   onExportCsv,
   onRefresh,
   isRefreshing,
-  onOpenQrScanner,
 }: TopHeaderProps) {
   const [isDark, setIsDark] = useState(false);
 
@@ -116,16 +114,17 @@ export function TopHeader({
 
         {/* Right Action Icons */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={onOpenQrScanner}
-            className="flex h-8 items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-2.5 text-xs font-semibold text-blue-700 shadow-2xs transition hover:bg-blue-100 dark:border-blue-900/70 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/60"
-            title="Scan equipment QR code"
+          {/* Camera scanning is offered only on phone-sized screens. */}
+          <a
+            href="/scanner"
+            className="flex h-9 items-center gap-1.5 rounded-xl bg-blue-600 px-3 text-sm font-bold text-white shadow-sm shadow-blue-500/30 transition hover:bg-blue-500 active:scale-95 sm:hidden"
+            title="Open QR Scanner"
           >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z" />
             </svg>
-            <span className="hidden md:inline">Scan QR</span>
-          </button>
+            <span>Scan QR</span>
+          </a>
           {/* Refresh button */}
           <button
             onClick={onRefresh}

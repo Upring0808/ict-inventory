@@ -168,10 +168,10 @@ export function EquipmentModal({
   const isComputer = equipmentType === 'Desktop Computers' || equipmentType === 'Laptop Computers';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/65 p-0 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center sm:p-4">
+      <div role="dialog" aria-modal="true" aria-label={itemToEdit ? 'Edit equipment' : 'Register equipment'} className="max-h-[94svh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-zinc-200 bg-white p-4 shadow-2xl animate-in slide-in-from-bottom-5 duration-200 dark:border-zinc-800 dark:bg-zinc-900 sm:max-h-[90vh] sm:rounded-2xl sm:p-6 sm:zoom-in-95">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
+        <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center justify-between border-b border-zinc-100 bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:-mx-6 sm:-mt-6 sm:px-6">
           <div>
             <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
               {itemToEdit ? 'Edit Equipment Specifications' : 'Register New ICT Asset'}
@@ -485,7 +485,7 @@ export function EquipmentModal({
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+          <div className="sticky bottom-0 -mx-4 -mb-4 flex items-center justify-end gap-3 border-t border-zinc-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:-mx-6 sm:-mb-6 sm:px-6">
             <button
               type="button"
               onClick={onClose}

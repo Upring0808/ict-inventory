@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { InventoryItem, FilterState, EquipmentStatusCategory } from '@/types/inventory';
 import {
   loadInventory,
@@ -24,17 +23,14 @@ import { EquipmentModal } from '@/components/inventory/EquipmentModal';
 import { EquipmentDetailDrawer } from '@/components/inventory/EquipmentDetailDrawer';
 import { SqlSchemaModal } from '@/components/inventory/SqlSchemaModal';
 import { DeleteConfirmModal } from '@/components/inventory/DeleteConfirmModal';
-import { QrScannerModal } from '@/components/inventory/QrScannerModal';
 
 export default function InventoryDashboard() {
-  const router = useRouter();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentTab, setCurrentTab] = useState<SidebarTab>('overview');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const sidebarPreferenceReady = useRef(false);
   const liveRefreshTimer = useRef<number | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
@@ -115,11 +111,6 @@ export default function InventoryDashboard() {
     if (!sidebarPreferenceReady.current) return;
     localStorage.setItem('ict_inventory_sidebar_collapsed', String(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
-
-  const handleQrScanned = useCallback((verificationPath: string) => {
-    setIsQrScannerOpen(false);
-    router.push(verificationPath);
-  }, [router]);
 
   // Compute live summary
   const summary = useMemo(() => calculateSummary(items), [items]);
@@ -329,7 +320,6 @@ export default function InventoryDashboard() {
           onExportCsv={handleExportCsv}
           onRefresh={fetchData}
           isRefreshing={isRefreshing}
-          onOpenQrScanner={() => setIsQrScannerOpen(true)}
         />
 
         {/* Main Body */}
@@ -482,11 +472,6 @@ export default function InventoryDashboard() {
         onSyncSuccess={fetchData}
       />
 
-      <QrScannerModal
-        isOpen={isQrScannerOpen}
-        onClose={() => setIsQrScannerOpen(false)}
-        onScanned={handleQrScanned}
-      />
     </div>
   );
 }

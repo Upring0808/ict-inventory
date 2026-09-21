@@ -194,7 +194,7 @@ export function Sidebar({
         </div>
 
         {/* Add Asset Button */}
-        <div className="px-3 pt-3">
+        <div className="px-3 pt-3 space-y-2">
           <button
             onClick={() => {
               onOpenAddModal();
@@ -209,7 +209,20 @@ export function Sidebar({
             </svg>
             <span className={`sidebar-label overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-28 opacity-100'}`}>Add Equipment</span>
           </button>
+          {/* Scan QR shortcut — big and obvious especially on mobile */}
+          <a
+            href="/scanner"
+            onClick={() => { if (isMobileOpen) onCloseMobile(); }}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border-2 border-blue-500 bg-blue-50 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 active:scale-98 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/70 sm:hidden"
+            title={isCollapsed ? 'Scan QR code' : undefined}
+          >
+            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z" />
+            </svg>
+            <span className={`sidebar-label overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-28 opacity-100'}`}>Scan QR</span>
+          </a>
         </div>
+
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
