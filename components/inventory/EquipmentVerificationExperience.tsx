@@ -35,6 +35,8 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
   const [verifierName, setVerifierName] = useState('');
   const [verificationComment, setVerificationComment] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [resolveActiveRemark, setResolveActiveRemark] = useState(false);
+  const [showAllCheckIns, setShowAllCheckIns] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -45,6 +47,8 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
       setSuccessMessage(null);
       setErrorMessage(null);
       setConfirmed(false);
+      setResolveActiveRemark(false);
+      setShowAllCheckIns(false);
       const found = propertyNumber ? await findItemByPropertyNumber(propertyNumber) : null;
       if (active) {
         setItem(found);
@@ -61,10 +65,11 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
     setSuccessMessage(null);
     setErrorMessage(null);
     try {
-      const updated = await recordQrVerification(item, verifierName, verificationComment);
+      const updated = await recordQrVerification(item, verifierName, verificationComment, resolveActiveRemark);
       setItem(updated);
       setConfirmed(false);
       setVerificationComment('');
+      setResolveActiveRemark(false);
       setSuccessMessage('Verification recorded! Returning to scanner…');
       // Redirect back to scanner after a short delay so the user sees the success message
       setTimeout(() => {
@@ -128,9 +133,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
                   </div>
                 </div>
                 <h2 className="mt-4 text-xl font-bold tracking-tight">{item.model}</h2>
-                <p className="mt-0.5 text-sm text-white/80">
-                  {item.brand}{isComputer && item.computerName ? ` · ${item.computerName}` : ''}
-                </p>
+                <p className="mt-0.5 text-sm text-white/80">{item.brand}</p>
                 <p className="mt-4 font-mono text-sm font-bold tracking-wide">{item.propertyNumber}</p>
               </div>
 
@@ -138,7 +141,6 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
                 <ReviewField label="Serial number" value={item.serialNumber} />
                 <ReviewField label="Office / division" value={item.location} />
                 <ReviewField label="Accountable person" value={item.accountablePersonnel} />
-                <ReviewField label="PMS conducted" value={item.datePmsConducted} />
                 <ReviewField label="Last verified" value={formatDate(item.lastVerifiedAt)} />
               </div>
               {item.remarks && <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200"><span className="font-bold">Maintenance note: </span>{item.remarks}</div>}
@@ -180,6 +182,54 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
               </section>
             )}
 
+            {/* ── Check-in history ── */}
+            <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Verification audit</p>
+                  <h3 className="mt-0.5 text-sm font-bold text-zinc-900 dark:text-zinc-50">Check-in history</h3>
+                </div>
+                <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                  {item.verificationHistory?.length || 0} check-in{item.verificationHistory?.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              {!item.verificationHistory?.length ? (
+                <p className="mt-3 rounded-xl bg-zinc-50 p-3 text-xs text-zinc-500 dark:bg-zinc-800/60 dark:text-zinc-400">
+                  No QR check-ins have been recorded yet.
+                </p>
+              ) : (
+                <>
+                  <ol className="mt-4 space-y-3 border-l-2 border-zinc-200 pl-4 dark:border-zinc-700">
+                    {(showAllCheckIns ? item.verificationHistory : item.verificationHistory.slice(0, 3)).map((checkIn) => (
+                      <li key={checkIn.id} className="relative">
+                        <span className="absolute -left-[22px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-blue-500 dark:border-zinc-900" />
+                        <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                          QR verified · {formatDate(checkIn.verifiedAt)}
+                          {checkIn.verifiedBy ? ` by ${checkIn.verifiedBy}` : ''}
+                        </p>
+                        {checkIn.comment && <p className="mt-1 rounded-lg bg-zinc-50 px-2.5 py-2 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">{checkIn.comment}</p>}
+                        {checkIn.remarkResolved && (
+                          <p className="mt-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                            ✓ Resolved active remark{checkIn.resolvedRemark ? `: ${checkIn.resolvedRemark}` : ''}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                  {item.verificationHistory.length > 3 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllCheckIns((showAll) => !showAll)}
+                      className="mt-4 text-xs font-bold text-blue-700 transition hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      {showAllCheckIns ? 'Show recent check-ins' : `Show all ${item.verificationHistory.length} check-ins`}
+                    </button>
+                  )}
+                </>
+              )}
+            </section>
+
             {/* ── Approval form ── */}
             <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex gap-3">
@@ -209,6 +259,21 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
                 placeholder="Add an observation, issue, or note from this on-site check."
                 className="mt-1.5 w-full resize-none rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
               />
+
+              {item.remarks && (
+                <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs leading-relaxed text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100">
+                  <input
+                    type="checkbox"
+                    checked={resolveActiveRemark}
+                    onChange={(e) => setResolveActiveRemark(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>
+                    <span className="block font-bold">Resolve active remark</span>
+                    <span className="mt-0.5 block">Clear “{item.remarks}” after this check-in. The selected equipment condition stays unchanged.</span>
+                  </span>
+                </label>
+              )}
 
               <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300">
                 <input

@@ -219,14 +219,18 @@ export async function findItemByPropertyNumber(propertyNumber: string): Promise<
 export async function recordQrVerification(
   item: InventoryItem,
   verifiedBy?: string,
-  comment?: string
+  comment?: string,
+  resolveActiveRemark = false
 ): Promise<InventoryItem> {
   const verifiedAt = new Date().toISOString();
+  const resolvedRemark = resolveActiveRemark ? item.remarks?.trim() : undefined;
   const verification: EquipmentVerification = {
     id: `verify-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     verifiedAt,
     verifiedBy: verifiedBy?.trim() || undefined,
     comment: comment?.trim() || undefined,
+    remarkResolved: Boolean(resolvedRemark),
+    resolvedRemark,
     method: 'qr',
   };
 
@@ -236,7 +240,11 @@ export async function recordQrVerification(
     lastVerifiedAt: verifiedAt,
     lastVerifiedBy: verification.verifiedBy,
     verificationCount: (item.verificationCount || 0) + 1,
-    verificationHistory: [verification, ...(item.verificationHistory || [])].slice(0, 30),
+    verificationHistory: [verification, ...(item.verificationHistory || [])].slice(0, 100),
+    // Clearing a note does not alter the condition category. It only removes the
+    // stale remark embedded in the reported status, which keeps staff in control.
+    remarks: resolvedRemark ? undefined : item.remarks,
+    status: resolvedRemark ? item.statusCategory : item.status,
   });
 }
 

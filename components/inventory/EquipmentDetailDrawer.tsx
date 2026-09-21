@@ -49,6 +49,7 @@ export function EquipmentDetailDrawer({
   onDelete,
 }: EquipmentDetailDrawerProps) {
   const [copied, setCopied] = useState(false);
+  const [showAllCheckIns, setShowAllCheckIns] = useState(false);
 
   if (!item) return null;
 
@@ -66,6 +67,7 @@ export function EquipmentDetailDrawer({
   const isComputer =
     item.equipmentType === 'Desktop Computers' ||
     item.equipmentType === 'Laptop Computers';
+  const checkIns = item.verificationHistory || [];
 
   return (
     /* Backdrop — z-50 */
@@ -162,17 +164,27 @@ export function EquipmentDetailDrawer({
               <InfoRow label="Verified by" value={item.lastVerifiedBy} />
               <InfoRow label="Last updated by approved QR" value={item.updatedAt ? new Date(item.updatedAt).toLocaleString() : undefined} />
             </div>
-            {item.verificationHistory && item.verificationHistory.length > 0 && (
+            {checkIns.length > 0 && (
               <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Latest check-ins</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Check-in history</p>
                 <div className="mt-2 space-y-1.5">
-                  {item.verificationHistory.slice(0, 3).map((verification) => (
+                  {(showAllCheckIns ? checkIns : checkIns.slice(0, 3)).map((verification) => (
                     <div key={verification.id} className="text-[11px] text-zinc-600 dark:text-zinc-300">
                       <p><span className="font-semibold">QR verified</span> · {new Date(verification.verifiedAt).toLocaleString()}{verification.verifiedBy ? ` by ${verification.verifiedBy}` : ''}</p>
                       {verification.comment && <p className="mt-1 rounded-lg bg-zinc-50 px-2 py-1.5 leading-relaxed text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{verification.comment}</p>}
+                      {verification.remarkResolved && <p className="mt-1 font-semibold text-emerald-700 dark:text-emerald-400">✓ Active remark resolved{verification.resolvedRemark ? `: ${verification.resolvedRemark}` : ''}</p>}
                     </div>
                   ))}
                 </div>
+                {checkIns.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllCheckIns((showAll) => !showAll)}
+                    className="mt-3 text-[11px] font-bold text-blue-700 transition hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    {showAllCheckIns ? 'Show recent check-ins' : `Show all ${checkIns.length} check-ins`}
+                  </button>
+                )}
               </div>
             )}
           </div>

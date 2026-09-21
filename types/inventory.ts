@@ -19,6 +19,9 @@ export interface EquipmentVerification {
   verifiedAt: string;
   verifiedBy?: string;
   comment?: string;
+  /** Records an explicit on-site clearing of the active equipment remark. */
+  remarkResolved?: boolean;
+  resolvedRemark?: string;
   method: 'qr';
 }
 
