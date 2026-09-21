@@ -140,7 +140,8 @@ function mapDbRowToItem(row: Record<string, unknown>): InventoryItem {
     statusCategory: (row.status_category as InventoryItem['statusCategory']) || 'Serviceable',
     remarks: row.remarks ? String(row.remarks) : undefined,
     createdAt: row.created_at ? String(row.created_at) : undefined,
-    updatedAt: row.updated_at ? String(row.updated_at) : undefined,
+    // `updated_at` is reserved for an approved QR check-in, not ordinary edits.
+    updatedAt: row.last_verified_at && row.updated_at ? String(row.updated_at) : undefined,
     lastVerifiedAt: row.last_verified_at ? String(row.last_verified_at) : undefined,
     lastVerifiedBy: row.last_verified_by ? String(row.last_verified_by) : undefined,
     verificationCount: typeof row.verification_count === 'number'
@@ -311,7 +312,6 @@ export async function createItem(newItem: Omit<InventoryItem, 'id' | 'createdAt'
     ...newItem,
     id: 'eq-' + Date.now().toString().slice(-6),
     createdAt: timestamp,
-    updatedAt: timestamp,
     yearAcquired: normalizeYearAcquired(newItem.yearAcquired, newItem.propertyNumber),
   };
 
@@ -342,29 +342,28 @@ export async function createItem(newItem: Omit<InventoryItem, 'id' | 'createdAt'
  * Updates an equipment item in Supabase and LocalStorage.
  */
 export async function updateItem(item: InventoryItem): Promise<InventoryItem> {
-  const stampedItem: InventoryItem = {
+  const normalizedItem: InventoryItem = {
     ...item,
     yearAcquired: normalizeYearAcquired(item.yearAcquired, item.propertyNumber),
-    updatedAt: new Date().toISOString(),
   };
   const localItems = getLocalItems();
-  const updatedLocal = localItems.map((it) => (it.id === stampedItem.id ? stampedItem : it));
+  const updatedLocal = localItems.map((it) => (it.id === normalizedItem.id ? normalizedItem : it));
   saveLocalItems(updatedLocal);
 
   try {
     const supabase = createBrowserClient();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stampedItem.id);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedItem.id);
 
     const query = isUuid
-      ? supabase.from('equipment').update(mapItemToDbRow(stampedItem)).eq('id', stampedItem.id)
-      : supabase.from('equipment').update(mapItemToDbRow(stampedItem)).eq('property_number', stampedItem.propertyNumber);
+      ? supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('id', normalizedItem.id)
+      : supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('property_number', normalizedItem.propertyNumber);
 
     await query;
   } catch (err) {
     console.warn('Could not update directly to Supabase, updated locally:', err);
   }
 
-  return stampedItem;
+  return normalizedItem;
 }
 
 /** Listen for cloud edits made by another dashboard or verification phone. */

@@ -68,6 +68,8 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
     }
   };
 
+  const isComputer = item?.equipmentType === 'Desktop Computers' || item?.equipmentType === 'Laptop Computers';
+
   return (
     <main className="min-h-screen bg-[#f7faf9] px-4 py-5 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50 sm:py-8">
       <div className="mx-auto w-full max-w-xl">
@@ -117,6 +119,40 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
             </section>
 
             <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mb-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Record details</p>
+                <h3 className="mt-0.5 text-sm font-bold">Asset, custody & condition</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <ReviewField label="Year acquired" value={item.yearAcquired} />
+                <ReviewField label="Shelf life" value={item.shelfLife} />
+                <ReviewField label="Accountable sex" value={item.accountableSex} />
+                <ReviewField label="Employment status" value={item.accountableStatus} />
+                <ReviewField label="Condition" value={item.statusCategory} />
+                <ReviewField label="Reported status" value={item.status} />
+              </div>
+            </section>
+
+            {isComputer && (
+              <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="mb-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Technical details</p>
+                  <h3 className="mt-0.5 text-sm font-bold">Hardware & software</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <ReviewField label="Computer name" value={item.computerName} />
+                  <ReviewField label="Range category" value={item.rangeCategory} />
+                  <ReviewField label="Processor" value={item.processor} />
+                  <ReviewField label="RAM" value={item.ram} />
+                  <ReviewField label="Graphics / GPU" value={item.gpu} />
+                  <ReviewField label="Operating system" value={item.osInstalled} />
+                  <ReviewField label="Office software" value={item.officeProductivityProduct} />
+                  <ReviewField label="Endpoint protection" value={item.endpointProtection} />
+                </div>
+              </section>
+            )}
+
+            <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex gap-3">
                 <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="m5 13 4 4L19 7" /></svg>
@@ -145,7 +181,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
             </section>
 
             <p className="px-2 text-center text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">Last verified: {formatDate(item.lastVerifiedAt)}{item.lastVerifiedBy ? ` by ${item.lastVerifiedBy}` : ''} · {item.verificationCount || 0} QR confirmation{item.verificationCount === 1 ? '' : 's'}</p>
-            <p className="px-2 text-center text-[10px] text-zinc-400 dark:text-zinc-600">Record last updated: {formatDate(item.updatedAt)}</p>
+            <p className="px-2 text-center text-[10px] text-zinc-400 dark:text-zinc-600">Last updated by approved QR: {formatDate(item.updatedAt)}</p>
           </div>
         )}
       </div>

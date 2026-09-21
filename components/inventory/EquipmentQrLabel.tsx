@@ -34,14 +34,71 @@ export function EquipmentQrLabel({ item }: EquipmentQrLabelProps) {
     ? equipmentVerificationUrl(item, window.location.origin)
     : null;
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!qrDataUrl) return;
+    const qrImage = new Image();
+
+    await new Promise<void>((resolve, reject) => {
+      qrImage.onload = () => resolve();
+      qrImage.onerror = () => reject(new Error('QR image could not be prepared.'));
+      qrImage.src = qrDataUrl;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 1180;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const drawCentered = (text: string, y: number, font: string, color: string, maxWidth = 800) => {
+      context.font = font;
+      context.fillStyle = color;
+      let renderedText = text || 'Not recorded';
+      while (context.measureText(renderedText).width > maxWidth && renderedText.length > 1) {
+        renderedText = `${renderedText.slice(0, -2)}…`;
+      }
+      context.fillText(renderedText, canvas.width / 2, y);
+    };
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    const headerGradient = context.createLinearGradient(0, 0, canvas.width, 0);
+    headerGradient.addColorStop(0, '#15803d');
+    headerGradient.addColorStop(1, '#1d4ed8');
+    context.fillStyle = headerGradient;
+    context.fillRect(0, 0, canvas.width, 168);
+
+    context.textAlign = 'center';
+    drawCentered('PENRO BATANES', 63, '700 34px Arial, sans-serif', '#ffffff');
+    drawCentered('ICT ASSET VERIFICATION LABEL', 108, '700 18px Arial, sans-serif', '#dbeafe');
+    drawCentered('DENR · REGION 2', 139, '600 14px Arial, sans-serif', '#dcfce7');
+
+    context.drawImage(qrImage, 160, 205, 580, 580);
+    context.strokeStyle = '#d4d4d8';
+    context.lineWidth = 2;
+    context.strokeRect(160, 205, 580, 580);
+
+    drawCentered('PROPERTY NUMBER', 842, '700 15px Arial, sans-serif', '#64748b');
+    drawCentered(item.propertyNumber, 885, '700 30px monospace', '#111827');
+    drawCentered('SERIAL NUMBER', 940, '700 15px Arial, sans-serif', '#64748b');
+    drawCentered(item.serialNumber || 'Not recorded', 975, '600 20px monospace', '#1f2937');
+    drawCentered('EQUIPMENT MODEL', 1032, '700 15px Arial, sans-serif', '#64748b');
+    drawCentered(`${item.brand} ${item.model}`.trim(), 1067, '700 22px Arial, sans-serif', '#111827');
+
+    context.fillStyle = '#f1f5f9';
+    context.fillRect(0, 1110, canvas.width, 70);
+    drawCentered('Scan to review and verify this equipment on site', 1153, '600 16px Arial, sans-serif', '#475569');
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) return;
+
     const link = document.createElement('a');
-    link.href = qrDataUrl;
+    link.href = URL.createObjectURL(blob);
     link.download = `PENRO-Batanes-QR-${item.propertyNumber.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();
+    URL.revokeObjectURL(link.href);
   };
 
   return (

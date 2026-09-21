@@ -78,7 +78,14 @@ create policy "Allow all operations for authenticated and anon" on public.equipm
 create or replace function public.handle_updated_at()
 returns trigger as $$
 begin
-  new.updated_at = timezone('utc'::text, now());
+  -- A record is considered officially updated only after an on-site QR
+  -- verification changes last_verified_at. Ordinary corrections stay editable
+  -- without resetting the verification audit timestamp.
+  if new.last_verified_at is distinct from old.last_verified_at then
+    new.updated_at = timezone('utc'::text, now());
+  else
+    new.updated_at = old.updated_at;
+  end if;
   return new;
 end;
 $$ language plpgsql;

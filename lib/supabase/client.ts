@@ -20,7 +20,7 @@ export function createBrowserClient(): SupabaseClient {
 
   if (!supabaseUrl || !supabaseKey) {
     throw new Error(
-      'Missing Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be defined in your .env.local file.'
+      'Supabase is not configured for this deployment. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY to the active environment in Vercel Project Settings, then redeploy. (.env.local only configures your local computer.)'
     );
   }
 

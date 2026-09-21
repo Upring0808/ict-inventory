@@ -84,7 +84,12 @@ create policy "Allow all operations for anon users" on public.equipment
 create or replace function public.handle_updated_at()
 returns trigger as $$
 begin
-  new.updated_at = timezone('utc'::text, now());
+  -- Only an approved QR verification updates the audit timestamp.
+  if new.last_verified_at is distinct from old.last_verified_at then
+    new.updated_at = timezone('utc'::text, now());
+  else
+    new.updated_at = old.updated_at;
+  end if;
   return new;
 end;
 $$ language plpgsql;

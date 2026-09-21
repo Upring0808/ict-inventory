@@ -18,7 +18,16 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Supabase on Vercel
+
+`.env.local` configures only your local computer and is intentionally not deployed with the repository. To enable the live Supabase connection on Vercel:
+
+1. Open the Vercel project, then go to **Settings → Environment Variables**.
+2. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` as plain values (no Markdown brackets or quotes).
+3. Select at least the **Production** environment; also select **Preview** if preview deployments should connect to Supabase.
+4. Redeploy the project. `NEXT_PUBLIC_` variables are compiled into the browser bundle during the build, so a redeploy is required.
+
+Keep `.env.local` out of Git and do not add secret/service-role keys with the `NEXT_PUBLIC_` prefix.
 
 ## Learn More
 

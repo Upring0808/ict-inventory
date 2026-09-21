@@ -159,7 +159,7 @@ export function EquipmentDetailDrawer({
             <div className="mt-3 grid grid-cols-1 gap-3 border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800 sm:grid-cols-2">
               <InfoRow label="Last verified" value={item.lastVerifiedAt ? new Date(item.lastVerifiedAt).toLocaleString() : undefined} />
               <InfoRow label="Verified by" value={item.lastVerifiedBy} />
-              <InfoRow label="Record last updated" value={item.updatedAt ? new Date(item.updatedAt).toLocaleString() : undefined} />
+              <InfoRow label="Last updated by approved QR" value={item.updatedAt ? new Date(item.updatedAt).toLocaleString() : undefined} />
             </div>
             {item.verificationHistory && item.verificationHistory.length > 0 && (
               <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
