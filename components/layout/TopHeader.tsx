@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SyncStatus } from '@/lib/inventoryService';
 
 interface TopHeaderProps {
@@ -27,6 +27,7 @@ export function TopHeader({
   isRefreshing,
 }: TopHeaderProps) {
   const [isDark, setIsDark] = useState(false);
+  const themeTransitionTimer = useRef<number | null>(null);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -35,16 +36,27 @@ export function TopHeader({
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  useEffect(() => () => {
+    if (themeTransitionTimer.current) window.clearTimeout(themeTransitionTimer.current);
+  }, []);
+
   const toggleTheme = () => {
     const nextDark = !isDark;
+    const root = document.documentElement;
+    if (themeTransitionTimer.current) window.clearTimeout(themeTransitionTimer.current);
+    root.classList.add('theme-transitioning');
     setIsDark(nextDark);
     if (nextDark) {
-      document.documentElement.classList.add('dark');
+      root.classList.add('dark');
       localStorage.setItem('theme', 'dark');
     } else {
-      document.documentElement.classList.remove('dark');
+      root.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
+    themeTransitionTimer.current = window.setTimeout(() => {
+      root.classList.remove('theme-transitioning');
+      themeTransitionTimer.current = null;
+    }, 260);
   };
 
   return (

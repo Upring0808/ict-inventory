@@ -89,6 +89,8 @@ export function EquipmentQrLabel({ item }: EquipmentQrLabelProps) {
 
     // Asset identity strip — property and serial are deliberately larger than the model.
     const STRIP_Y = 742;
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(32, STRIP_Y + 14, W - 64, 230);
     ctx.strokeStyle = '#e4e4e7';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -105,6 +107,14 @@ export function EquipmentQrLabel({ item }: EquipmentQrLabelProps) {
     drawCentered(serialStr, STRIP_Y + 148, '700 27px "Courier New", monospace', '#1d4ed8');
     drawCentered('MODEL', STRIP_Y + 187, '700 13px Arial, sans-serif', '#6b7280');
     drawCentered(modelStr, STRIP_Y + 226, '700 23px Arial, sans-serif', '#374151');
+
+    // Draw this last so the trim guide remains visible over the header and all label sections.
+    ctx.save();
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([12, 8]);
+    ctx.strokeRect(14, 14, W - 28, H - 28);
+    ctx.restore();
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
     if (!blob) return;

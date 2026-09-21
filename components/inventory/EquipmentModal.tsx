@@ -462,7 +462,7 @@ export function EquipmentModal({
                 className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-blue-400"
               >
                 <option value="Serviceable">Serviceable (Normal / Operational)</option>
-                <option value="Needs Attention">Needs Attention (Slow, Outdated OS)</option>
+                <option value="Needs Attention">Needs Attention</option>
                 <option value="Parts Replacement">Parts Replacement (HDD, Battery, Fan)</option>
                 <option value="For Repair">For Repair (Inoperable / Defective)</option>
                 <option value="For Disposal">For Disposal (Condemned)</option>

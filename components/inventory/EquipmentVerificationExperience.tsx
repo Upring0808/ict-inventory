@@ -18,20 +18,6 @@ function formatDate(value?: string) {
     : new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-/** Detect obviously outdated OS versions */
-function isOutdatedOs(os?: string): boolean {
-  if (!os) return false;
-  const lower = os.toLowerCase();
-  return (
-    lower.includes('windows xp') ||
-    lower.includes('windows vista') ||
-    lower.includes('windows 7') ||
-    lower.includes('windows 8') ||
-    // Windows 10 has reached end-of-support in Oct 2025
-    lower.includes('windows 10')
-  );
-}
-
 function ReviewField({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/60">
@@ -92,7 +78,6 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
   };
 
   const isComputer = item?.equipmentType === 'Desktop Computers' || item?.equipmentType === 'Laptop Computers';
-  const outdatedOs = isComputer && isOutdatedOs(item?.osInstalled);
 
   return (
     <main className="min-h-screen bg-[#f7faf9] px-4 py-5 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50 sm:py-8">
@@ -139,32 +124,15 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider">{item.equipmentType}</span>
                   <div className="flex items-center gap-2">
-                    {outdatedOs && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-950">
-                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
-                        Outdated OS
-                      </span>
-                    )}
                     <StatusBadge category={item.statusCategory} rawStatus={item.status} remarks={item.remarks} size="sm" showRemark={false} />
                   </div>
                 </div>
                 <h2 className="mt-4 text-xl font-bold tracking-tight">{item.model}</h2>
-                <p className="mt-0.5 text-sm text-white/80">{item.brand}</p>
+                <p className="mt-0.5 text-sm text-white/80">
+                  {item.brand}{isComputer && item.computerName ? ` · ${item.computerName}` : ''}
+                </p>
                 <p className="mt-4 font-mono text-sm font-bold tracking-wide">{item.propertyNumber}</p>
               </div>
-
-              {/* Outdated OS warning banner */}
-              {outdatedOs && (
-                <div className="flex items-start gap-3 border-b border-amber-200 bg-amber-50 px-5 py-3.5 dark:border-amber-900/50 dark:bg-amber-950/40">
-                  <svg className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /></svg>
-                  <div>
-                    <p className="text-sm font-bold text-amber-800 dark:text-amber-200">Outdated / Unsupported OS Detected</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-                      <span className="font-semibold">{item.osInstalled}</span> is no longer receiving security updates. Flag this unit for OS upgrade during verification.
-                    </p>
-                  </div>
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-3 p-4">
                 <ReviewField label="Serial number" value={item.serialNumber} />
@@ -205,11 +173,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
                   <ReviewField label="Processor" value={item.processor} />
                   <ReviewField label="RAM" value={item.ram} />
                   <ReviewField label="Graphics / GPU" value={item.gpu} />
-                  <div className={`rounded-xl border p-3 ${outdatedOs ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/60'}`}>
-                    <p className={`text-[10px] font-bold uppercase tracking-wider ${outdatedOs ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-500 dark:text-zinc-400'}`}>Operating system</p>
-                    <p className={`mt-1 break-words text-sm font-semibold ${outdatedOs ? 'text-amber-900 dark:text-amber-100' : 'text-zinc-900 dark:text-zinc-50'}`}>{item.osInstalled || '—'}</p>
-                    {outdatedOs && <p className="mt-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">⚠ Needs upgrade</p>}
-                  </div>
+                  <ReviewField label="Operating system" value={item.osInstalled} />
                   <ReviewField label="Office software" value={item.officeProductivityProduct} />
                   <ReviewField label="Endpoint protection" value={item.endpointProtection} />
                 </div>

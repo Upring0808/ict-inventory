@@ -29,13 +29,48 @@
 
 html.dark {
   color-scheme: dark;
-  --background: #0c1015;
-  --foreground: #f4f4f5;
-  --brand-gradient-subtle: linear-gradient(135deg, #052e16 0%, #1e3a5f 100%);
-  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
-  --shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.4), 0 2px 6px -1px rgb(0 0 0 / 0.2);
-  --shadow-modal: 0 20px 60px -12px rgb(0 0 0 / 0.7), 0 8px 20px -4px rgb(0 0 0 / 0.4);
-  --shadow-sidebar: 2px 0 12px 0 rgb(0 0 0 / 0.3);
+  /* Neutral charcoal surfaces modelled after mature messaging and workspace apps. */
+  --background: #202124;
+  --foreground: #e8eaed;
+  --brand-gradient-subtle: linear-gradient(135deg, #243129 0%, #263342 100%);
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.24), 0 1px 2px -1px rgb(0 0 0 / 0.18);
+  --shadow-card-hover: 0 6px 16px 0 rgb(0 0 0 / 0.28), 0 2px 6px -1px rgb(0 0 0 / 0.18);
+  --shadow-modal: 0 20px 60px -12px rgb(0 0 0 / 0.5), 0 8px 20px -4px rgb(0 0 0 / 0.25);
+  --shadow-sidebar: 2px 0 12px 0 rgb(0 0 0 / 0.2);
+}
+
+/* Bring utility-based dark surfaces into the same readable charcoal palette. */
+html.dark body { background: #202124; color: #e8eaed; }
+html.dark .dark\:bg-zinc-950,
+html.dark .dark\:bg-zinc-950\/95 { background-color: #202124 !important; }
+html.dark .dark\:bg-zinc-950\/60,
+html.dark .dark\:bg-zinc-950\/50,
+html.dark .dark\:bg-zinc-950\/40,
+html.dark .dark\:bg-zinc-950\/30 { background-color: rgb(32 33 36 / 0.72) !important; }
+html.dark .dark\:bg-zinc-900,
+html.dark .dark\:bg-zinc-900\/95,
+html.dark .dark\:bg-zinc-900\/80,
+html.dark .dark\:bg-zinc-900\/70 { background-color: #292a2d !important; }
+html.dark .dark\:bg-zinc-800,
+html.dark .dark\:bg-zinc-800\/60 { background-color: #303134 !important; }
+html.dark .dark\:border-zinc-800 { border-color: #3c4043 !important; }
+html.dark .dark\:border-zinc-700 { border-color: #5f6368 !important; }
+html.dark .dark\:text-zinc-50,
+html.dark .dark\:text-zinc-100 { color: #f1f3f4 !important; }
+html.dark .dark\:text-zinc-200 { color: #e8eaed !important; }
+html.dark .dark\:text-zinc-300 { color: #dadce0 !important; }
+html.dark .dark\:text-zinc-400 { color: #bdc1c6 !important; }
+html.dark .dark\:text-zinc-500 { color: #9aa0a6 !important; }
+html.dark .card { background: #292a2d; border-color: #3c4043; }
+
+/* Added only while the mode switch runs, so normal interactions stay snappy. */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow !important;
+  transition-duration: 240ms !important;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1) !important;
 }
 
 body {
@@ -204,5 +239,12 @@ table tbody tr {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 1ms !important;
+  }
+
+  html.theme-transitioning,
+  html.theme-transitioning *,
+  html.theme-transitioning *::before,
+  html.theme-transitioning *::after {
+    transition: none !important;
   }
 }
