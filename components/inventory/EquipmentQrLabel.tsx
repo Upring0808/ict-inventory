@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { InventoryItem } from '@/types/inventory';
 import { equipmentVerificationUrl } from '@/lib/qrEquipment';
@@ -34,19 +34,14 @@ export function EquipmentQrLabel({ item }: EquipmentQrLabelProps) {
     ? equipmentVerificationUrl(item, window.location.origin)
     : null;
 
-  const labelTitle = useMemo(
-    () => `${item.brand} ${item.model}`.trim(),
-    [item.brand, item.model]
-  );
-
-  const handlePrint = () => {
+  const handleDownload = () => {
     if (!qrDataUrl) return;
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    printWindow.document.write(`<!doctype html><html><head><title>QR label — ${item.propertyNumber}</title><style>body{font-family:Arial,sans-serif;padding:24px}.label{width:270px;border:2px solid #111827;border-radius:14px;padding:18px;text-align:center}.brand{font-size:11px;font-weight:bold;letter-spacing:.12em}.property{font-family:monospace;font-size:17px;font-weight:bold;margin:8px 0}.model{font-size:12px;color:#374151;min-height:30px}.qr{width:190px;height:190px;margin:12px auto 4px}.note{font-size:10px;color:#4b5563;margin:0}</style></head><body><div class="label"><div class="brand">PENRO BATANES · ICT ASSET</div><div class="property">${item.propertyNumber}</div><div class="model">${labelTitle}</div><img class="qr" src="${qrDataUrl}" alt="Equipment QR code"/><p class="note">Scan to verify this equipment on site</p></div><script>window.onload=function(){window.print();window.close()}</script></body></html>`);
-    printWindow.document.close();
+    const link = document.createElement('a');
+    link.href = qrDataUrl;
+    link.download = `PENRO-Batanes-QR-${item.propertyNumber.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   return (
@@ -65,8 +60,8 @@ export function EquipmentQrLabel({ item }: EquipmentQrLabelProps) {
           <p className="mt-1 text-xs font-semibold text-zinc-800 dark:text-zinc-100">Scan to check and confirm on site</p>
           <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">The mobile screen records a dated verification only after the reviewer approves the displayed details.</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <button onClick={handlePrint} disabled={!qrDataUrl} className="rounded-lg bg-zinc-900 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-50 dark:bg-white dark:text-zinc-900">
-              Print label
+            <button onClick={handleDownload} disabled={!qrDataUrl} className="rounded-lg bg-zinc-900 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-50 dark:bg-white dark:text-zinc-900">
+              Download PNG
             </button>
             {verificationUrl && (
               <a href={verificationUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">

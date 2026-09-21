@@ -91,7 +91,7 @@ export function Sidebar({
           count: summary.laptopCount,
           icon: (
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16.5h16m-14 0 1-9h10l1 9m-2 0 .8 2H7.2l.8-2M9 11h6" />
             </svg>
           ),
         },
@@ -111,7 +111,7 @@ export function Sidebar({
           count: summary.scannerCount,
           icon: (
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V7Zm3 2h10m-9 4h8m-7 3h6" />
             </svg>
           ),
         },
@@ -149,12 +149,12 @@ export function Sidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col overflow-hidden border-r border-zinc-200/80 bg-white transition-[width,transform] duration-300 ease-out dark:border-zinc-800/80 dark:bg-zinc-950 lg:static lg:translate-x-0 ${isCollapsed ? 'sidebar-collapsed lg:w-[72px]' : 'lg:w-60'} ${
+        className={`sidebar-shell fixed inset-y-0 left-0 z-50 flex w-60 transform-gpu flex-col border-r border-zinc-200/80 bg-white transition-[width,transform] duration-300 ease-out dark:border-zinc-800/80 dark:bg-zinc-950 lg:static lg:translate-x-0 ${isCollapsed ? 'sidebar-collapsed lg:w-[72px]' : 'lg:w-60'} ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Logo / Title */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-zinc-100 dark:border-zinc-800/60">
+        <div className="relative flex items-center justify-between px-4 py-4 border-b border-zinc-100 dark:border-zinc-800/60">
           <div className="flex items-center gap-2.5">
             <div
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white shadow-md"
@@ -183,7 +183,7 @@ export function Sidebar({
           </button>
           <button
             onClick={onToggleCollapsed}
-            className="hidden rounded-lg p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 lg:flex"
+            className="absolute -right-3 top-1/2 z-10 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 shadow-sm transition hover:scale-105 hover:bg-zinc-50 hover:text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 lg:flex"
             title={isCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
           >

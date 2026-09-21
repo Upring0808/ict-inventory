@@ -127,6 +127,14 @@ body {
   transform: translateX(2px);
 }
 
+.sidebar-shell {
+  will-change: width, transform;
+}
+
+.sidebar-label {
+  will-change: max-width, opacity;
+}
+
 /* Loading skeleton shimmer */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

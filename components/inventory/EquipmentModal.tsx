@@ -80,20 +80,18 @@ export function EquipmentModal({
       setModel('');
       setBrand('');
       setAccountablePersonnel('');
-      setLocation('ICT');
-      setYearAcquired(new Date().getFullYear().toString());
+      setLocation('');
+      setYearAcquired('');
       setShelfLife('WITHIN 5 YEARS');
 
       setProcessor('');
-      setRam('8.00 GB');
-      setGpu('Intel UHD Graphics');
-      setOsInstalled('WINDOWS 11');
-      setOfficeProductivityProduct('MICROSOFT 365');
-      setEndpointProtection('KASPERSKY INTERNET SECURITY');
+      setRam('');
+      setGpu('');
+      setOsInstalled('');
+      setOfficeProductivityProduct('');
+      setEndpointProtection('');
 
-      setDatePmsConducted(
-        new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()
-      );
+      setDatePmsConducted('');
       setStatusCategory('Serviceable');
       setRemarks('');
       }
@@ -430,9 +428,11 @@ export function EquipmentModal({
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                maxLength={4}
                 value={yearAcquired}
-                onChange={(e) => setYearAcquired(e.target.value)}
-                placeholder="e.g. 2024-12-20 or 2022"
+                onChange={(e) => setYearAcquired(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="e.g. 2024"
                 className="mt-1 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-blue-400"
               />
             </div>

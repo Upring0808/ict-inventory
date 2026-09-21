@@ -1,6 +1,7 @@
 import { createBrowserClient } from '@/lib/supabase/client';
 import { EquipmentVerification, InventoryItem } from '@/types/inventory';
 import { initialInventoryItems } from '@/data/initialInventory';
+import { normalizeYearAcquired } from '@/lib/inventoryFormatting';
 
 const LOCAL_STORAGE_KEY = 'ict_inventory_data_v3';
 const LEGACY_STORAGE_KEY = 'ict_inventory_data_v2';
@@ -31,18 +32,22 @@ export function sanitizeInventoryItems(items: InventoryItem[]): { items: Invento
     const count = seen.get(upper) || 0;
     seen.set(upper, count + 1);
 
+    const normalizedYear = normalizeYearAcquired(item.yearAcquired, prop);
+    if (normalizedYear !== item.yearAcquired) modified = true;
+
     if (count > 0) {
       modified = true;
       const disambiguated = `${prop}-${String.fromCharCode(64 + count + 1)}`;
       return {
         ...item,
         propertyNumber: disambiguated,
+        yearAcquired: normalizeYearAcquired(item.yearAcquired, disambiguated),
       };
     }
 
-    if (prop !== item.propertyNumber) {
+    if (prop !== item.propertyNumber || normalizedYear !== item.yearAcquired) {
       modified = true;
-      return { ...item, propertyNumber: prop };
+      return { ...item, propertyNumber: prop, yearAcquired: normalizedYear };
     }
 
     return item;
@@ -115,7 +120,10 @@ function mapDbRowToItem(row: Record<string, unknown>): InventoryItem {
     accountablePersonnel: String(row.accountable_personnel),
     accountableSex: row.accountable_sex ? String(row.accountable_sex) : undefined,
     accountableStatus: row.accountable_status ? String(row.accountable_status) : undefined,
-    yearAcquired: row.year_acquired ? String(row.year_acquired) : undefined,
+    yearAcquired: normalizeYearAcquired(
+      row.year_acquired ? String(row.year_acquired) : undefined,
+      String(row.property_number)
+    ),
     shelfLife: (row.shelf_life as InventoryItem['shelfLife']) || 'WITHIN 5 YEARS',
 
     processor: row.processor ? String(row.processor) : undefined,
@@ -154,7 +162,7 @@ function mapItemToDbRow(item: InventoryItem): Record<string, unknown> {
     accountable_personnel: item.accountablePersonnel,
     accountable_sex: item.accountableSex || null,
     accountable_status: item.accountableStatus || null,
-    year_acquired: item.yearAcquired || null,
+    year_acquired: normalizeYearAcquired(item.yearAcquired, item.propertyNumber) || null,
     shelf_life: item.shelfLife || 'WITHIN 5 YEARS',
 
     processor: item.processor || null,
@@ -209,13 +217,15 @@ export async function findItemByPropertyNumber(propertyNumber: string): Promise<
  */
 export async function recordQrVerification(
   item: InventoryItem,
-  verifiedBy?: string
+  verifiedBy?: string,
+  comment?: string
 ): Promise<InventoryItem> {
   const verifiedAt = new Date().toISOString();
   const verification: EquipmentVerification = {
     id: `verify-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     verifiedAt,
     verifiedBy: verifiedBy?.trim() || undefined,
+    comment: comment?.trim() || undefined,
     method: 'qr',
   };
 
@@ -296,10 +306,13 @@ export async function loadInventory(): Promise<{ items: InventoryItem[]; status:
  */
 export async function createItem(newItem: Omit<InventoryItem, 'id' | 'createdAt'>): Promise<InventoryItem> {
   const localItems = getLocalItems();
+  const timestamp = new Date().toISOString();
   const createdItem: InventoryItem = {
     ...newItem,
     id: 'eq-' + Date.now().toString().slice(-6),
-    createdAt: new Date().toISOString(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    yearAcquired: normalizeYearAcquired(newItem.yearAcquired, newItem.propertyNumber),
   };
 
   const updatedLocal = [createdItem, ...localItems];
@@ -329,24 +342,45 @@ export async function createItem(newItem: Omit<InventoryItem, 'id' | 'createdAt'
  * Updates an equipment item in Supabase and LocalStorage.
  */
 export async function updateItem(item: InventoryItem): Promise<InventoryItem> {
+  const stampedItem: InventoryItem = {
+    ...item,
+    yearAcquired: normalizeYearAcquired(item.yearAcquired, item.propertyNumber),
+    updatedAt: new Date().toISOString(),
+  };
   const localItems = getLocalItems();
-  const updatedLocal = localItems.map((it) => (it.id === item.id ? item : it));
+  const updatedLocal = localItems.map((it) => (it.id === stampedItem.id ? stampedItem : it));
   saveLocalItems(updatedLocal);
 
   try {
     const supabase = createBrowserClient();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stampedItem.id);
 
     const query = isUuid
-      ? supabase.from('equipment').update(mapItemToDbRow(item)).eq('id', item.id)
-      : supabase.from('equipment').update(mapItemToDbRow(item)).eq('property_number', item.propertyNumber);
+      ? supabase.from('equipment').update(mapItemToDbRow(stampedItem)).eq('id', stampedItem.id)
+      : supabase.from('equipment').update(mapItemToDbRow(stampedItem)).eq('property_number', stampedItem.propertyNumber);
 
     await query;
   } catch (err) {
     console.warn('Could not update directly to Supabase, updated locally:', err);
   }
 
-  return item;
+  return stampedItem;
+}
+
+/** Listen for cloud edits made by another dashboard or verification phone. */
+export function subscribeToInventoryChanges(onChange: () => void): () => void {
+  try {
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel('equipment-live-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'equipment' }, onChange)
+      .subscribe();
+
+    return () => { void supabase.removeChannel(channel); };
+  } catch (err) {
+    console.warn('Live inventory updates are unavailable:', err);
+    return () => undefined;
+  }
 }
 
 /**

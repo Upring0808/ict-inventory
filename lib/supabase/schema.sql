@@ -57,10 +57,20 @@ create index if not exists idx_equipment_shelf_life on public.equipment (shelf_l
 create index if not exists idx_equipment_status_cat on public.equipment (status_category);
 create index if not exists idx_equipment_last_verified on public.equipment (last_verified_at);
 
+-- Enable real-time refresh after office or mobile verification changes.
+do $$
+begin
+  alter publication supabase_realtime add table public.equipment;
+exception
+  when duplicate_object or undefined_object then null;
+end;
+$$;
+
 -- Enable Row Level Security (RLS)
 alter table public.equipment enable row level security;
 
 -- Policy to allow all operations with your Publishable/Anon API Key
+drop policy if exists "Allow all operations for authenticated and anon" on public.equipment;
 create policy "Allow all operations for authenticated and anon" on public.equipment
   for all using (true) with check (true);
 

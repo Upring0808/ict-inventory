@@ -31,6 +31,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [verifierName, setVerifierName] = useState('');
+  const [verificationComment, setVerificationComment] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -55,9 +56,10 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
     setIsSaving(true);
     setMessage(null);
     try {
-      const updated = await recordQrVerification(item, verifierName);
+      const updated = await recordQrVerification(item, verifierName, verificationComment);
       setItem(updated);
       setConfirmed(false);
+      setVerificationComment('');
       setMessage('Verification recorded. This equipment is now marked as reviewed.');
     } catch {
       setMessage('We could not save the verification. Please check your connection and try again.');
@@ -127,6 +129,9 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
 
               <label className="mt-4 block text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">Verified by <span className="font-normal text-zinc-400">optional</span></label>
               <input value={verifierName} onChange={(event) => setVerifierName(event.target.value)} placeholder="Your name or initials" className="mt-1.5 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+
+              <label className="mt-4 block text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">Verification comment <span className="font-normal text-zinc-400">optional</span></label>
+              <textarea value={verificationComment} onChange={(event) => setVerificationComment(event.target.value)} rows={3} maxLength={500} placeholder="Add an observation, issue, or note from this on-site check." className="mt-1.5 w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
 
               <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl bg-zinc-50 p-3 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">
                 <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500" />

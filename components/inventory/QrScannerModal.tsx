@@ -17,6 +17,8 @@ export function QrScannerModal({ isOpen, onClose, onScanned }: QrScannerModalPro
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
+  const isDetectingRef = useRef(false);
+  const hasScannedRef = useRef(false);
   const [status, setStatus] = useState<'idle' | 'starting' | 'scanning' | 'unsupported' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [manualValue, setManualValue] = useState('');
@@ -35,6 +37,8 @@ export function QrScannerModal({ isOpen, onClose, onScanned }: QrScannerModalPro
     }
 
     let active = true;
+    hasScannedRef.current = false;
+    isDetectingRef.current = false;
     const BarcodeDetectorConstructor = (window as Window & {
       BarcodeDetector?: new (options?: { formats?: string[] }) => BarcodeDetectorLike;
     }).BarcodeDetector;
@@ -70,13 +74,15 @@ export function QrScannerModal({ isOpen, onClose, onScanned }: QrScannerModalPro
         setMessage('Point your camera at an equipment QR code.');
 
         timerRef.current = window.setInterval(async () => {
-          if (!active || video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) return;
+          if (!active || hasScannedRef.current || isDetectingRef.current || video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) return;
+          isDetectingRef.current = true;
           try {
             const results = await detector.detect(video);
             const rawValue = results[0]?.rawValue;
             if (!rawValue) return;
             const path = getVerificationPathFromScan(rawValue, window.location.origin);
             if (path) {
+              hasScannedRef.current = true;
               stopCamera();
               onScanned(path);
             } else {
@@ -84,8 +90,10 @@ export function QrScannerModal({ isOpen, onClose, onScanned }: QrScannerModalPro
             }
           } catch {
             // A frame can fail to decode; keep looking at the next frame.
+          } finally {
+            isDetectingRef.current = false;
           }
-        }, 350);
+        }, 140);
       } catch (error) {
         if (!active) return;
         setStatus('error');

@@ -10,6 +10,8 @@ interface OverviewViewProps {
   onNavigateTab: (tab: 'all' | 'issues' | 'desktops' | 'laptops' | 'printers' | 'scanners') => void;
   onOpenAddModal: () => void;
   onViewDetails: (item: InventoryItem) => void;
+  searchQuery?: string;
+  searchResults?: InventoryItem[];
 }
 
 // Animated donut using CSS transition on stroke-dashoffset
@@ -103,6 +105,9 @@ export function OverviewView({
   summary,
   onNavigateTab,
   onOpenAddModal,
+  onViewDetails,
+  searchQuery = '',
+  searchResults = [],
 }: OverviewViewProps) {
   const locationStats = getLocationDistribution(items, 8);
   const issueCount = summary.needsAttentionCount + summary.partsReplacementCount + summary.forRepairCount;
@@ -184,6 +189,37 @@ export function OverviewView({
           Add Equipment
         </button>
       </div>
+
+      {searchQuery.trim() && (
+        <section className="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm dark:border-blue-900/60 dark:bg-zinc-900">
+          <div className="flex items-center justify-between gap-3 border-b border-blue-100 bg-blue-50/70 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-950/25">
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Search results</h3>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{searchResults.length} matching equipment record{searchResults.length === 1 ? '' : 's'} for “{searchQuery.trim()}”</p>
+            </div>
+            {searchResults.length > 6 && (
+              <button onClick={() => onNavigateTab('all')} className="shrink-0 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-50 dark:border-blue-900 dark:bg-zinc-900 dark:text-blue-300">
+                View all
+              </button>
+            )}
+          </div>
+          {searchResults.length === 0 ? (
+            <p className="p-5 text-center text-xs text-zinc-500 dark:text-zinc-400">No equipment matches that search.</p>
+          ) : (
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {searchResults.slice(0, 6).map((item) => (
+                <button key={item.id} onClick={() => onViewDetails(item)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                  <span className="min-w-0">
+                    <span className="block truncate font-mono text-xs font-bold text-zinc-800 dark:text-zinc-100">{item.propertyNumber}</span>
+                    <span className="mt-0.5 block truncate text-[11px] text-zinc-500 dark:text-zinc-400">{item.brand} · {item.model} · {item.location}</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{item.yearAcquired || '—'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 3 KPI Cards — staggered entrance */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

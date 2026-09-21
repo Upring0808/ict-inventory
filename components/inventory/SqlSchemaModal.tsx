@@ -65,6 +65,15 @@ create index if not exists idx_equipment_location on public.equipment (location)
 create index if not exists idx_equipment_shelf_life on public.equipment (shelf_life);
 create index if not exists idx_equipment_last_verified on public.equipment (last_verified_at);
 
+-- Enable instant cross-device refresh after office or mobile changes
+do $$
+begin
+  alter publication supabase_realtime add table public.equipment;
+exception
+  when duplicate_object or undefined_object then null;
+end;
+$$;
+
 -- 3. Enable Row Level Security (RLS) and allow public read/write
 alter table public.equipment enable row level security;
 drop policy if exists "Allow all operations for anon users" on public.equipment;

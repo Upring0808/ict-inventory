@@ -166,9 +166,10 @@ export function EquipmentDetailDrawer({
                 <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Latest check-ins</p>
                 <div className="mt-2 space-y-1.5">
                   {item.verificationHistory.slice(0, 3).map((verification) => (
-                    <p key={verification.id} className="text-[11px] text-zinc-600 dark:text-zinc-300">
-                      <span className="font-semibold">QR verified</span> · {new Date(verification.verifiedAt).toLocaleString()}{verification.verifiedBy ? ` by ${verification.verifiedBy}` : ''}
-                    </p>
+                    <div key={verification.id} className="text-[11px] text-zinc-600 dark:text-zinc-300">
+                      <p><span className="font-semibold">QR verified</span> · {new Date(verification.verifiedAt).toLocaleString()}{verification.verifiedBy ? ` by ${verification.verifiedBy}` : ''}</p>
+                      {verification.comment && <p className="mt-1 rounded-lg bg-zinc-50 px-2 py-1.5 leading-relaxed text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{verification.comment}</p>}
+                    </div>
                   ))}
                 </div>
               </div>

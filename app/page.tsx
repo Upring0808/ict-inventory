@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { InventoryItem, FilterState, EquipmentStatusCategory } from '@/types/inventory';
 import {
   loadInventory,
   createItem,
   updateItem,
   deleteItem,
+  subscribeToInventoryChanges,
   SyncStatus,
 } from '@/lib/inventoryService';
 import { calculateSummary } from '@/lib/summaryUtils';
@@ -25,6 +27,7 @@ import { DeleteConfirmModal } from '@/components/inventory/DeleteConfirmModal';
 import { QrScannerModal } from '@/components/inventory/QrScannerModal';
 
 export default function InventoryDashboard() {
+  const router = useRouter();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -33,6 +36,7 @@ export default function InventoryDashboard() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const sidebarPreferenceReady = useRef(false);
+  const liveRefreshTimer = useRef<number | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     source: 'local',
     isConnectedToSupabase: false,
@@ -69,19 +73,35 @@ export default function InventoryDashboard() {
   };
 
   // Initial load
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsRefreshing(true);
     const { items: loaded, status } = await loadInventory();
     setItems(loaded);
+    setDetailItem((current) => current
+      ? loaded.find((item) => item.id === current.id) ?? null
+      : current
+    );
     setSyncStatus(status);
     setIsLoading(false);
     setIsRefreshing(false);
-  };
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void fetchData(); }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [fetchData]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToInventoryChanges(() => {
+      if (liveRefreshTimer.current) window.clearTimeout(liveRefreshTimer.current);
+      liveRefreshTimer.current = window.setTimeout(() => { void fetchData(); }, 180);
+    });
+
+    return () => {
+      if (liveRefreshTimer.current) window.clearTimeout(liveRefreshTimer.current);
+      unsubscribe();
+    };
+  }, [fetchData]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -98,8 +118,8 @@ export default function InventoryDashboard() {
 
   const handleQrScanned = useCallback((verificationPath: string) => {
     setIsQrScannerOpen(false);
-    window.location.assign(verificationPath);
-  }, []);
+    router.push(verificationPath);
+  }, [router]);
 
   // Compute live summary
   const summary = useMemo(() => calculateSummary(items), [items]);
@@ -350,6 +370,8 @@ export default function InventoryDashboard() {
                   setIsModalOpen(true);
                 }}
                 onViewDetails={(item) => setDetailItem(item)}
+                searchQuery={filters.searchQuery}
+                searchResults={filteredItems}
               />
             </div>
           ) : (

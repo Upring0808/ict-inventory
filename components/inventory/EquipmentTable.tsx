@@ -17,7 +17,7 @@ type SortField =
   | 'brand'
   | 'location'
   | 'statusCategory'
-  | 'yearAcquired';
+  | 'accountablePersonnel';
 type SortOrder = 'asc' | 'desc';
 
 function getAcquiredYear(yearStr?: string): number | null {
@@ -144,7 +144,7 @@ export function EquipmentTable({
               <SortableHeader field="propertyNumber" className="pl-4" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Property No.</SortableHeader>
               <SortableHeader field="equipmentType" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Type</SortableHeader>
               <SortableHeader field="brand" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Model / Brand</SortableHeader>
-              <SortableHeader field="yearAcquired" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Acquired</SortableHeader>
+              <SortableHeader field="accountablePersonnel" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Accountable</SortableHeader>
               <SortableHeader field="location" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Division</SortableHeader>
               <SortableHeader field="statusCategory" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Status</SortableHeader>
               <th className="px-3 py-3 text-right text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 pr-4">

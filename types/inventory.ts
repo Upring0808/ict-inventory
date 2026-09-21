@@ -18,6 +18,7 @@ export interface EquipmentVerification {
   id: string;
   verifiedAt: string;
   verifiedBy?: string;
+  comment?: string;
   method: 'qr';
 }
 
