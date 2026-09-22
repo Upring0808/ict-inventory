@@ -5,6 +5,30 @@ import { normalizeYearAcquired } from '@/lib/inventoryFormatting';
 
 const LOCAL_STORAGE_KEY = 'ict_inventory_data_v3';
 const LEGACY_STORAGE_KEY = 'ict_inventory_data_v2';
+export const INVENTORY_BROADCAST_CHANNEL = 'ict_inventory_sync_channel';
+export const INVENTORY_CUSTOM_EVENT = 'ict:inventory:changed';
+
+export function broadcastLocalChange(action: string, itemId?: string) {
+  if (typeof window === 'undefined') return;
+
+  // 1. In-tab custom event
+  try {
+    window.dispatchEvent(
+      new CustomEvent(INVENTORY_CUSTOM_EVENT, {
+        detail: { action, itemId, timestamp: Date.now() },
+      })
+    );
+  } catch {}
+
+  // 2. Cross-tab BroadcastChannel
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const channel = new BroadcastChannel(INVENTORY_BROADCAST_CHANNEL);
+      channel.postMessage({ action, itemId, timestamp: Date.now() });
+      channel.close();
+    } catch {}
+  }
+}
 
 export type StorageSource = 'supabase' | 'local';
 
@@ -337,12 +361,14 @@ export async function createItem(newItem: Omit<InventoryItem, 'id' | 'createdAt'
     if (!error && data) {
       const persisted = mapDbRowToItem(data);
       saveLocalItems([persisted, ...localItems]);
+      broadcastLocalChange('create', persisted.id);
       return persisted;
     }
   } catch (err) {
     console.warn('Could not insert directly to Supabase, saved locally:', err);
   }
 
+  broadcastLocalChange('create', createdItem.id);
   return createdItem;
 }
 
@@ -363,31 +389,129 @@ export async function updateItem(item: InventoryItem): Promise<InventoryItem> {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedItem.id);
 
     const query = isUuid
-      ? supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('id', normalizedItem.id)
-      : supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('property_number', normalizedItem.propertyNumber);
+      ? supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('id', normalizedItem.id).select()
+      : supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('property_number', normalizedItem.propertyNumber).select();
 
-    await query;
+    const { error } = await query;
+    if (error) {
+      console.warn('Could not update directly to Supabase:', error.message);
+    }
   } catch (err) {
     console.warn('Could not update directly to Supabase, updated locally:', err);
   }
 
+  broadcastLocalChange('update', normalizedItem.id);
   return normalizedItem;
 }
 
-/** Listen for cloud edits made by another dashboard or verification phone. */
+/**
+ * Listen for live updates made across all tabs, windows, devices, or QR verification scans.
+ */
 export function subscribeToInventoryChanges(onChange: () => void): () => void {
-  try {
-    const supabase = createBrowserClient();
-    const channel = supabase
-      .channel('equipment-live-updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'equipment' }, onChange)
-      .subscribe();
+  let isCleanedUp = false;
 
-    return () => { void supabase.removeChannel(channel); };
+  // 1. Supabase Realtime channel for cross-device updates
+  let supabaseChannel: ReturnType<ReturnType<typeof createBrowserClient>['channel']> | null = null;
+  let supabaseClientInstance: ReturnType<typeof createBrowserClient> | null = null;
+
+  try {
+    supabaseClientInstance = createBrowserClient();
+    const channelId = `eq-live-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+
+    supabaseChannel = supabaseClientInstance
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'equipment' },
+        () => {
+          if (!isCleanedUp) {
+            onChange();
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (err) {
+          console.warn('Supabase Realtime status:', status, err);
+        }
+      });
   } catch (err) {
-    console.warn('Live inventory updates are unavailable:', err);
-    return () => undefined;
+    console.warn('Live cloud subscription unavailable:', err);
   }
+
+  // 2. BroadcastChannel for instant cross-tab / cross-window sync
+  let broadcastChannel: BroadcastChannel | null = null;
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      broadcastChannel = new BroadcastChannel(INVENTORY_BROADCAST_CHANNEL);
+      broadcastChannel.onmessage = () => {
+        if (!isCleanedUp) {
+          onChange();
+        }
+      };
+    } catch {}
+  }
+
+  // 3. Storage event listener (fallback cross-tab communication)
+  const handleStorage = (e: StorageEvent) => {
+    if (!isCleanedUp && (e.key === LOCAL_STORAGE_KEY || e.key === null)) {
+      onChange();
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', handleStorage);
+  }
+
+  // 4. Custom event for local in-page updates
+  const handleCustomEvent = () => {
+    if (!isCleanedUp) {
+      onChange();
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener(INVENTORY_CUSTOM_EVENT, handleCustomEvent);
+  }
+
+  // 5. Visibility and focus listener: refresh automatically when switching back to this tab
+  const handleVisibilityOrFocus = () => {
+    if (!isCleanedUp && typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      onChange();
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+  }
+
+  // 6. Background heartbeat (every 15 seconds) so background tabs / sleeping connections stay updated
+  let heartbeat: number | null = null;
+  if (typeof window !== 'undefined') {
+    heartbeat = window.setInterval(() => {
+      if (!isCleanedUp && document.visibilityState === 'visible') {
+        onChange();
+      }
+    }, 15000);
+  }
+
+  return () => {
+    isCleanedUp = true;
+    if (heartbeat) window.clearInterval(heartbeat);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(INVENTORY_CUSTOM_EVENT, handleCustomEvent);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    }
+    if (broadcastChannel) {
+      try {
+        broadcastChannel.close();
+      } catch {}
+    }
+    if (supabaseChannel && supabaseClientInstance) {
+      try {
+        void supabaseClientInstance.removeChannel(supabaseChannel);
+      } catch {}
+    }
+  };
 }
 
 /**
@@ -411,6 +535,7 @@ export async function deleteItem(id: string, propertyNumber: string): Promise<bo
     console.warn('Could not delete directly from Supabase, deleted locally:', err);
   }
 
+  broadcastLocalChange('delete', id);
   return true;
 }
 

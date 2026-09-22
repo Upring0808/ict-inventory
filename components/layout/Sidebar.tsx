@@ -299,15 +299,15 @@ export function Sidebar({
           <button
             onClick={onOpenSqlModal}
             className={`flex w-full items-center rounded-lg py-1.5 text-left text-xs transition hover:bg-zinc-100 dark:hover:bg-zinc-800/60 ${isCollapsed ? 'justify-center px-2' : 'gap-2 px-2.5'}`}
-            title={isCollapsed ? (syncStatus.source === 'supabase' ? 'Supabase connected' : 'Local storage') : undefined}
+            title={isCollapsed ? (syncStatus.source === 'supabase' ? 'Supabase Realtime connected' : 'Local storage') : undefined}
           >
             <span
               className={`h-1.5 w-1.5 shrink-0 rounded-full ${
                 syncStatus.source === 'supabase' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'
               }`}
             />
-            <span className={`sidebar-label overflow-hidden whitespace-nowrap text-zinc-500 transition-[max-width,opacity] duration-200 dark:text-zinc-400 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-32 opacity-100'}`}>
-              {syncStatus.source === 'supabase' ? 'Supabase connected' : 'Local storage'}
+            <span className={`sidebar-label overflow-hidden whitespace-nowrap text-zinc-500 transition-[max-width,opacity] duration-200 dark:text-zinc-400 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-36 opacity-100'}`}>
+              {syncStatus.source === 'supabase' ? 'Realtime Sync Active' : 'Local Storage'}
             </span>
           </button>
 

@@ -25,19 +25,10 @@ export function FilterBar({
 }: FilterBarProps) {
   const hasActiveFilters = Boolean(
     filters.searchQuery ||
-    filters.type ||
     filters.location ||
     filters.statusCategory ||
     filters.year
   );
-
-  const typeOptions: DropdownOption[] = [
-    { value: '', label: 'All Types' },
-    { value: 'Desktop Computers', label: '🖥️ Desktop PCs' },
-    { value: 'Laptop Computers', label: '💻 Laptops' },
-    { value: 'Printers', label: '🖨️ Printers' },
-    { value: 'Scanners', label: '📄 Scanners' },
-  ];
 
   const statusOptions: DropdownOption[] = [
     { value: '', label: 'All Statuses' },
@@ -45,6 +36,7 @@ export function FilterBar({
     { value: 'Needs Attention', label: 'Needs Attention' },
     { value: 'Parts Replacement', label: 'Parts Replacement' },
     { value: 'For Repair', label: 'For Repair' },
+    { value: 'For Disposal', label: 'For Disposal' },
   ];
 
   const yearOptions: DropdownOption[] = [
@@ -67,13 +59,6 @@ export function FilterBar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Filter Dropdowns */}
-      <AnimatedDropdown
-        options={typeOptions}
-        value={filters.type}
-        onChange={(val) => onFilterChange({ type: val })}
-        placeholder="All Types"
-      />
-
       <AnimatedDropdown
         options={statusOptions}
         value={filters.statusCategory}

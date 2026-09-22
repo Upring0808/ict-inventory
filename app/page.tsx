@@ -68,9 +68,9 @@ export default function InventoryDashboard() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Initial load
-  const fetchData = useCallback(async () => {
-    setIsRefreshing(true);
+  // Initial and live data loading
+  const fetchData = useCallback(async (isSilent = false) => {
+    if (!isSilent) setIsRefreshing(true);
     const { items: loaded, status } = await loadInventory();
     setItems(loaded);
     setDetailItem((current) => current
@@ -79,7 +79,7 @@ export default function InventoryDashboard() {
     );
     setSyncStatus(status);
     setIsLoading(false);
-    setIsRefreshing(false);
+    if (!isSilent) setIsRefreshing(false);
   }, []);
 
   useEffect(() => {
@@ -87,10 +87,11 @@ export default function InventoryDashboard() {
     return () => window.clearTimeout(timer);
   }, [fetchData]);
 
+  // System-wide realtime and cross-device live updates
   useEffect(() => {
     const unsubscribe = subscribeToInventoryChanges(() => {
       if (liveRefreshTimer.current) window.clearTimeout(liveRefreshTimer.current);
-      liveRefreshTimer.current = window.setTimeout(() => { void fetchData(); }, 180);
+      liveRefreshTimer.current = window.setTimeout(() => { void fetchData(true); }, 100);
     });
 
     return () => {
@@ -203,6 +204,12 @@ export default function InventoryDashboard() {
           ) {
             return false;
           }
+        } else if (filters.statusCategory === 'For Disposal') {
+          const isDisposal =
+            item.statusCategory === 'For Disposal' ||
+            item.status?.toLowerCase().includes('disposal') ||
+            item.status?.toLowerCase().includes('condemned');
+          if (!isDisposal) return false;
         } else if (item.statusCategory !== filters.statusCategory) {
           return false;
         }
@@ -388,17 +395,23 @@ export default function InventoryDashboard() {
                 onFilterChange={(newFilters) =>
                   setFilters((prev) => ({ ...prev, ...newFilters }))
                 }
-                onResetFilters={() =>
+                onResetFilters={() => {
+                  const tabType =
+                    currentTab === 'desktops' ? 'Desktop Computers' :
+                    currentTab === 'laptops' ? 'Laptop Computers' :
+                    currentTab === 'printers' ? 'Printers' :
+                    currentTab === 'scanners' ? 'Scanners' : '';
+                  const tabStatus = currentTab === 'issues' ? 'Needs Attention' : '';
                   setFilters({
                     searchQuery: '',
-                    type: '',
+                    type: tabType,
                     location: '',
                     brand: '',
-                    statusCategory: '',
+                    statusCategory: tabStatus,
                     shelfLife: '',
                     year: '',
-                  })
-                }
+                  });
+                }}
                 availableLocations={availableLocations}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}

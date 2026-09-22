@@ -32,22 +32,27 @@ export function calculateSummary(items: InventoryItem[]): InventorySummary {
         break;
     }
 
-    switch (item.statusCategory) {
-      case 'Serviceable':
-        serviceableCount++;
-        break;
-      case 'Parts Replacement':
-        partsReplacementCount++;
-        break;
-      case 'For Repair':
-        forRepairCount++;
-        break;
-      case 'Needs Attention':
-        needsAttentionCount++;
-        break;
-      case 'For Disposal':
-        forDisposalCount++;
-        break;
+    if (
+      item.statusCategory === 'For Disposal' ||
+      item.status?.toLowerCase().includes('disposal') ||
+      item.status?.toLowerCase().includes('condemned')
+    ) {
+      forDisposalCount++;
+    } else {
+      switch (item.statusCategory) {
+        case 'Serviceable':
+          serviceableCount++;
+          break;
+        case 'Parts Replacement':
+          partsReplacementCount++;
+          break;
+        case 'For Repair':
+          forRepairCount++;
+          break;
+        case 'Needs Attention':
+          needsAttentionCount++;
+          break;
+      }
     }
 
     if (item.shelfLife === 'BEYOND 5 YEARS') {
