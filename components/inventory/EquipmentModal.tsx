@@ -169,9 +169,9 @@ export function EquipmentModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/65 p-0 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center sm:p-4">
-      <div role="dialog" aria-modal="true" aria-label={itemToEdit ? 'Edit equipment' : 'Register equipment'} className="max-h-[94svh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-zinc-200 bg-white p-4 shadow-2xl animate-in slide-in-from-bottom-5 duration-200 dark:border-zinc-800 dark:bg-zinc-900 sm:max-h-[90vh] sm:rounded-2xl sm:p-6 sm:zoom-in-95">
+      <div role="dialog" aria-modal="true" aria-label={itemToEdit ? 'Edit equipment' : 'Register equipment'} className="flex h-[94svh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-zinc-200 bg-white shadow-2xl animate-in slide-in-from-bottom-5 duration-200 dark:border-zinc-800 dark:bg-zinc-900 sm:h-[90vh] sm:rounded-2xl sm:zoom-in-95">
         {/* Header */}
-        <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center justify-between border-b border-zinc-100 bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:-mx-6 sm:-mt-6 sm:px-6">
+        <div className="shrink-0 flex items-center justify-between border-b border-zinc-100 bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:px-6">
           <div>
             <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
               {itemToEdit ? 'Edit Equipment Specifications' : 'Register New ICT Asset'}
@@ -198,7 +198,7 @@ export function EquipmentModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
           {/* Section 1: Identification */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
@@ -485,7 +485,7 @@ export function EquipmentModal({
           </div>
 
           {/* Footer Actions */}
-          <div className="sticky bottom-0 -mx-4 -mb-4 flex items-center justify-end gap-3 border-t border-zinc-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:-mx-6 sm:-mb-6 sm:px-6">
+          <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex items-center justify-end gap-3 border-t border-zinc-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95 sm:-mx-6 sm:-mb-6 sm:px-6">
             <button
               type="button"
               onClick={onClose}

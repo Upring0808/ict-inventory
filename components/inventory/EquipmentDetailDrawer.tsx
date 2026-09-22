@@ -216,7 +216,6 @@ export function EquipmentDetailDrawer({
             </h4>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <InfoRow label="Condition" value={item.statusCategory} />
-              <InfoRow label="PMS Conducted" value={item.datePmsConducted} />
               {item.remarks && (
                 <div className="col-span-2 sm:col-span-3">
                   <span className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Remarks / Notes</span>
