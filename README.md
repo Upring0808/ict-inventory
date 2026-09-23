@@ -1,45 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ICT Asset & PMS Inventory
 
-## Getting Started
+Inventory dashboard for PENRO Batanes ICT equipment, built with Next.js and Supabase.
 
-First, run the development server:
+## Run locally
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Secure Supabase setup
 
-## Supabase on Vercel
+Authentication, the public QR detail route, account management, and the audit log use Supabase. Local storage is only a read cache; equipment changes must be accepted by Supabase before they are shown as saved.
 
-`.env.local` configures only your local computer and is intentionally not deployed with the repository. To enable the live Supabase connection on Vercel:
+### 1. Apply the database schema
 
-1. Open the Vercel project, then go to **Settings → Environment Variables**.
-2. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` as plain values (no Markdown brackets or quotes).
-3. Select at least the **Production** environment; also select **Preview** if preview deployments should connect to Supabase.
-4. Redeploy the project. `NEXT_PUBLIC_` variables are compiled into the browser bundle during the build, so a redeploy is required.
+Run the full [`lib/supabase/schema.sql`](lib/supabase/schema.sql) script in Supabase **SQL Editor**. The same secure schema is available in the app's Cloud Sync Assistant and at `/supabase-schema.sql`.
 
-Keep `.env.local` out of Git and do not add secret/service-role keys with the `NEXT_PUBLIC_` prefix.
+The script creates the two-account allowlist and activity log, removes previous equipment policies, permits database writes only for allowlisted signed-in users, and sets up the audit triggers. Equipment detail is read publicly through a server endpoint that returns one requested item; the equipment table itself is not readable with the public key.
 
-## Learn More
+### 2. Configure Supabase Auth
 
-To learn more about Next.js, take a look at the following resources:
+- Enable the Email provider and Google provider.
+- Turn **off** Supabase's **Allow new users to sign up** setting. The application creates accounts through its server-side admin API, so public sign-up is not needed.
+- Set the Supabase site URL and add your local and deployed `/auth/callback` URLs to the allowed redirect URLs.
+- Configure the Google OAuth client in Supabase Auth and set Google's authorized redirect URI to the Supabase callback shown in that provider's settings.
+- Google identities automatically link to an existing Auth user with the same verified email. Create that email as an authorized account in Settings first.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Set environment variables
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Set these in `.env.local` for local development and in the hosting environment for deployment:
 
-## Deploy on Vercel
+```text
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+SUPABASE_SECRET_KEY=your-server-only-secret-key
+INVENTORY_BOOTSTRAP_SECRET=your-random-secret-of-at-least-32-characters
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`SUPABASE_SECRET_KEY` may instead be named `SUPABASE_SERVICE_ROLE_KEY`. Keep it server-only and never prefix it with `NEXT_PUBLIC_`. `INVENTORY_BOOTSTRAP_SECRET` is used only to create the first account; once the account exists, `/api/setup` is locked.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4. Create the two user accounts
+
+Open `/setup` and create the first named account using the bootstrap secret and a password of at least 12 characters. Sign in, open **Settings**, and create the second account. Both accounts have the same permissions, and no public registration route is provided.
+
+The login page accepts each account's email or optional username and password. Google sign-in is accepted only when the verified email and Auth identity match an authorized account.
+
+### 5. Deploy
+
+Add the same four environment variables to the hosting environment, including Production and any Preview environment that should connect to Supabase, then redeploy. Google redirect URLs must include the deployed `/auth/callback` URL.
+
+## Access and accountability
+
+- `/` is the authorized dashboard. Unauthenticated users see the sign-in screen.
+- `/verify?asset=…` and equipment QR codes remain public and read-only. Edit and QR verification controls appear only for an authorized signed-in user.
+- Equipment mutations are enforced by Supabase RLS. Local cache writes do not count as successful changes.
+- **Activity Log** records the user, action, equipment property number, changed fields, and timestamp. Equipment audit rows are written in the same database transaction as each equipment change.
+- **Settings** manages the two authorized account records, including names, optional usernames, and password resets.
+
+## Checks
+
+```bash
+npm run lint
+npm run build
+```

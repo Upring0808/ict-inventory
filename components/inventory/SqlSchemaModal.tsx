@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SyncStatus, pushAllToSupabase } from '@/lib/inventoryService';
 
 interface SqlSchemaModalProps {
@@ -11,94 +11,7 @@ interface SqlSchemaModalProps {
   onSyncSuccess: () => void;
 }
 
-const SQL_SCHEMA = `-- 1. Create the equipment table in public schema
-create table if not exists public.equipment (
-  id uuid default gen_random_uuid() primary key,
-  property_number text not null unique,
-  serial_number text,
-  equipment_type text not null,
-  model text not null,
-  brand text not null,
-  location text not null,
-  accountable_personnel text not null,
-  accountable_sex text,
-  accountable_status text,
-  year_acquired text,
-  shelf_life text default 'WITHIN 5 YEARS',
-
-  -- Hardware & Software Specifications
-  processor text,
-  ram text,
-  gpu text,
-  range_category text,
-  os_installed text,
-  office_productivity_product text,
-  endpoint_protection text,
-  computer_name text,
-
-  -- Operational Condition
-  date_pms_conducted text,
-  status text not null default 'Serviceable',
-  status_category text not null default 'Serviceable',
-  remarks text,
-
-  -- QR verification audit
-  last_verified_at timestamp with time zone,
-  last_verified_by text,
-  verification_count integer not null default 0,
-  verification_history jsonb not null default '[]'::jsonb,
-
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 1b. Add QR audit fields safely if your table already exists
-alter table public.equipment add column if not exists last_verified_at timestamp with time zone;
-alter table public.equipment add column if not exists last_verified_by text;
-alter table public.equipment add column if not exists verification_count integer not null default 0;
-alter table public.equipment add column if not exists verification_history jsonb not null default '[]'::jsonb;
-
--- 2. Performance indexes
-create index if not exists idx_equipment_prop_no on public.equipment (property_number);
-create index if not exists idx_equipment_type on public.equipment (equipment_type);
-create index if not exists idx_equipment_location on public.equipment (location);
-create index if not exists idx_equipment_shelf_life on public.equipment (shelf_life);
-create index if not exists idx_equipment_last_verified on public.equipment (last_verified_at);
-
--- Enable instant cross-device refresh after office or mobile changes
-do $$
-begin
-  alter publication supabase_realtime add table public.equipment;
-exception
-  when duplicate_object or undefined_object then null;
-end;
-$$;
-
--- 3. Enable Row Level Security (RLS) and allow public read/write
-alter table public.equipment enable row level security;
-drop policy if exists "Allow all operations for anon users" on public.equipment;
-create policy "Allow all operations for anon users" on public.equipment
-  for all using (true) with check (true);
-
--- 4. Keep the Last Updated field accurate for edits and QR confirmations
-create or replace function public.handle_updated_at()
-returns trigger as $$
-begin
-  -- Only an approved QR verification updates the audit timestamp.
-  if new.last_verified_at is distinct from old.last_verified_at then
-    new.updated_at = timezone('utc'::text, now());
-  else
-    new.updated_at = old.updated_at;
-  end if;
-  return new;
-end;
-$$ language plpgsql;
-
-drop trigger if exists set_equipment_updated_at on public.equipment;
-create trigger set_equipment_updated_at
-  before update on public.equipment
-  for each row
-  execute function public.handle_updated_at();`;
+const SCHEMA_URL = '/supabase-schema.sql';
 
 export function SqlSchemaModal({
   isOpen,
@@ -110,11 +23,29 @@ export function SqlSchemaModal({
   const [copied, setCopied] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [pushResult, setPushResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [schemaText, setSchemaText] = useState('');
+  const [schemaError, setSchemaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    void fetch(SCHEMA_URL, { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('The secure schema file could not be loaded.');
+        return response.text();
+      })
+      .then((content) => { if (active) setSchemaText(content); })
+      .catch((error: unknown) => {
+        if (active) setSchemaError(error instanceof Error ? error.message : 'The secure schema file could not be loaded.');
+      });
+    return () => { active = false; };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(SQL_SCHEMA);
+    if (!schemaText) return;
+    navigator.clipboard.writeText(schemaText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -156,7 +87,7 @@ export function SqlSchemaModal({
                 Supabase Cloud Sync Assistant
               </h3>
               <p className="text-xs text-zinc-500">
-                Follow these 3 easy steps to connect and push your {totalItems} items to your Supabase project.
+                Apply the secure schema before syncing your {totalItems} equipment records.
               </p>
             </div>
           </div>
@@ -224,12 +155,13 @@ export function SqlSchemaModal({
                   2
                 </span>
                 <h4 className="font-bold text-zinc-900 dark:text-zinc-100">
-                  Copy and Run the Database Schema
+                  Copy and Run the Secure Database Schema
                 </h4>
               </div>
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                disabled={!schemaText}
+                className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1 text-xs font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
               >
                 {copied ? (
                   <span className="text-emerald-400 dark:text-emerald-600 font-bold">✓ Copied!</span>
@@ -244,10 +176,10 @@ export function SqlSchemaModal({
               </button>
             </div>
             <p className="mt-1 pl-7 text-[11px] text-zinc-500">
-              Click <strong>Copy SQL Code</strong>, paste it into the Supabase SQL editor, and click the green <strong>RUN</strong> button.
+              Click <strong>Copy SQL Code</strong>, paste it into the Supabase SQL editor, and click <strong>RUN</strong>. This removes older open-write policies, limits writes to the two authorized accounts, and creates the activity log.
             </p>
             <pre className="mt-2.5 max-h-36 overflow-y-auto rounded-lg bg-zinc-900 p-2.5 font-mono text-[10px] text-zinc-300">
-              {SQL_SCHEMA}
+              {schemaText || schemaError || 'Loading secure schema…'}
             </pre>
           </div>
 

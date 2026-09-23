@@ -18,6 +18,8 @@ export interface EquipmentVerification {
   id: string;
   verifiedAt: string;
   verifiedBy?: string;
+  verifiedByUserId?: string;
+  verifiedByEmail?: string;
   comment?: string;
   /** Records an explicit on-site clearing of the active equipment remark. */
   remarkResolved?: boolean;

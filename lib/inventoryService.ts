@@ -219,16 +219,15 @@ export async function findItemByPropertyNumber(propertyNumber: string): Promise<
   if (!normalized) return null;
 
   try {
-    const supabase = createBrowserClient();
-    const { data, error } = await supabase
-      .from('equipment')
-      .select('*')
-      .eq('property_number', normalized)
-      .maybeSingle();
-
-    if (!error && data) return mapDbRowToItem(data);
+    const response = await fetch(`/api/public/equipment?propertyNumber=${encodeURIComponent(normalized)}`, {
+      cache: 'no-store',
+    });
+    if (response.ok) return mapDbRowToItem(await response.json() as Record<string, unknown>);
+    if (response.status !== 404) {
+      console.warn('Could not read equipment from the public equipment endpoint:', response.status);
+    }
   } catch (err) {
-    console.warn('Could not read equipment from Supabase, checking local cache:', err);
+    console.warn('Could not read equipment from the public endpoint, checking local cache:', err);
   }
 
   return getLocalItems().find(
@@ -242,7 +241,7 @@ export async function findItemByPropertyNumber(propertyNumber: string): Promise<
  */
 export async function recordQrVerification(
   item: InventoryItem,
-  verifiedBy?: string,
+  actor: { id: string; email: string; name: string },
   comment?: string,
   resolveActiveRemark = false
 ): Promise<InventoryItem> {
@@ -251,7 +250,9 @@ export async function recordQrVerification(
   const verification: EquipmentVerification = {
     id: `verify-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     verifiedAt,
-    verifiedBy: verifiedBy?.trim() || undefined,
+    verifiedBy: actor.name.trim(),
+    verifiedByUserId: actor.id,
+    verifiedByEmail: actor.email,
     comment: comment?.trim() || undefined,
     remarkResolved: Boolean(resolvedRemark),
     resolvedRemark,
@@ -262,7 +263,7 @@ export async function recordQrVerification(
     ...item,
     updatedAt: verifiedAt,
     lastVerifiedAt: verifiedAt,
-    lastVerifiedBy: verification.verifiedBy,
+    lastVerifiedBy: actor.name,
     verificationCount: (item.verificationCount || 0) + 1,
     verificationHistory: [verification, ...(item.verificationHistory || [])].slice(0, 100),
     // Clearing a note does not alter the condition category. It only removes the
@@ -335,73 +336,56 @@ export async function loadInventory(): Promise<{ items: InventoryItem[]; status:
 }
 
 /**
- * Adds an equipment item to both Supabase (if available) and LocalStorage.
+ * Creates an equipment item in Supabase. The browser cache is updated only
+ * after the database has accepted the write and its audit trigger has run.
  */
 export async function createItem(newItem: Omit<InventoryItem, 'id' | 'createdAt'>): Promise<InventoryItem> {
   const localItems = getLocalItems();
-  const timestamp = new Date().toISOString();
-  const createdItem: InventoryItem = {
+  const itemToInsert: InventoryItem = {
     ...newItem,
-    id: 'eq-' + Date.now().toString().slice(-6),
-    createdAt: timestamp,
+    id: '',
     yearAcquired: normalizeYearAcquired(newItem.yearAcquired, newItem.propertyNumber),
   };
 
-  const updatedLocal = [createdItem, ...localItems];
-  saveLocalItems(updatedLocal);
+  const { data, error } = await createBrowserClient()
+    .from('equipment')
+    .insert([mapItemToDbRow(itemToInsert)])
+    .select()
+    .single();
+  if (error || !data) throw new Error(error?.message || 'Equipment could not be saved to Supabase.');
 
-  try {
-    const supabase = createBrowserClient();
-    const { data, error } = await supabase
-      .from('equipment')
-      .insert([mapItemToDbRow(createdItem)])
-      .select()
-      .single();
-
-    if (!error && data) {
-      const persisted = mapDbRowToItem(data);
-      saveLocalItems([persisted, ...localItems]);
-      broadcastLocalChange('create', persisted.id);
-      return persisted;
-    }
-  } catch (err) {
-    console.warn('Could not insert directly to Supabase, saved locally:', err);
-  }
-
-  broadcastLocalChange('create', createdItem.id);
-  return createdItem;
+  const persisted = mapDbRowToItem(data);
+  saveLocalItems([persisted, ...localItems]);
+  broadcastLocalChange('create', persisted.id);
+  return persisted;
 }
 
 /**
- * Updates an equipment item in Supabase and LocalStorage.
+ * Updates an equipment item in Supabase. The browser cache changes only after
+ * the database write succeeds.
  */
 export async function updateItem(item: InventoryItem): Promise<InventoryItem> {
   const normalizedItem: InventoryItem = {
     ...item,
     yearAcquired: normalizeYearAcquired(item.yearAcquired, item.propertyNumber),
   };
+  const supabase = createBrowserClient();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedItem.id);
+
+  const query = isUuid
+    ? supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('id', normalizedItem.id).select().single()
+    : supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('property_number', normalizedItem.propertyNumber).select().single();
+
+  const { data, error } = await query;
+  if (error || !data) throw new Error(error?.message || 'Equipment could not be updated in Supabase.');
+
+  const persisted = mapDbRowToItem(data);
   const localItems = getLocalItems();
-  const updatedLocal = localItems.map((it) => (it.id === normalizedItem.id ? normalizedItem : it));
+  const updatedLocal = localItems.map((it) => (it.id === persisted.id ? persisted : it));
   saveLocalItems(updatedLocal);
 
-  try {
-    const supabase = createBrowserClient();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedItem.id);
-
-    const query = isUuid
-      ? supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('id', normalizedItem.id).select()
-      : supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('property_number', normalizedItem.propertyNumber).select();
-
-    const { error } = await query;
-    if (error) {
-      console.warn('Could not update directly to Supabase:', error.message);
-    }
-  } catch (err) {
-    console.warn('Could not update directly to Supabase, updated locally:', err);
-  }
-
-  broadcastLocalChange('update', normalizedItem.id);
-  return normalizedItem;
+  broadcastLocalChange('update', persisted.id);
+  return persisted;
 }
 
 /**
@@ -515,25 +499,20 @@ export function subscribeToInventoryChanges(onChange: () => void): () => void {
 }
 
 /**
- * Deletes an equipment item from Supabase and LocalStorage.
+ * Deletes an equipment item from Supabase. Local cache changes only after the
+ * database confirms that the row was removed.
  */
 export async function deleteItem(id: string, propertyNumber: string): Promise<boolean> {
-  const localItems = getLocalItems();
-  const updatedLocal = localItems.filter((it) => it.id !== id);
+  const supabase = createBrowserClient();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const query = isUuid
+    ? supabase.from('equipment').delete().eq('id', id).select('id').maybeSingle()
+    : supabase.from('equipment').delete().eq('property_number', propertyNumber).select('id').maybeSingle();
+  const { data, error } = await query;
+  if (error || !data) throw new Error(error?.message || 'Equipment could not be deleted from Supabase.');
+
+  const updatedLocal = getLocalItems().filter((it) => it.id !== id && it.propertyNumber !== propertyNumber);
   saveLocalItems(updatedLocal);
-
-  try {
-    const supabase = createBrowserClient();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
-    if (isUuid) {
-      await supabase.from('equipment').delete().eq('id', id);
-    } else {
-      await supabase.from('equipment').delete().eq('property_number', propertyNumber);
-    }
-  } catch (err) {
-    console.warn('Could not delete directly from Supabase, deleted locally:', err);
-  }
 
   broadcastLocalChange('delete', id);
   return true;

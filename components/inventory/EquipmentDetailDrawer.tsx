@@ -171,6 +171,7 @@ export function EquipmentDetailDrawer({
                   {(showAllCheckIns ? checkIns : checkIns.slice(0, 3)).map((verification) => (
                     <div key={verification.id} className="text-[11px] text-zinc-600 dark:text-zinc-300">
                       <p><span className="font-semibold">QR verified</span> · {new Date(verification.verifiedAt).toLocaleString()}{verification.verifiedBy ? ` by ${verification.verifiedBy}` : ''}</p>
+                      {verification.verifiedByEmail && <p className="mt-0.5 text-[10px] text-zinc-400">{verification.verifiedByEmail}</p>}
                       {verification.comment && <p className="mt-1 rounded-lg bg-zinc-50 px-2 py-1.5 leading-relaxed text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">{verification.comment}</p>}
                       {verification.remarkResolved && <p className="mt-1 font-semibold text-emerald-700 dark:text-emerald-400">✓ Active remark resolved{verification.resolvedRemark ? `: ${verification.resolvedRemark}` : ''}</p>}
                     </div>

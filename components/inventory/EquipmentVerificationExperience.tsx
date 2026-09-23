@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { InventoryItem } from '@/types/inventory';
-import { findItemByPropertyNumber, recordQrVerification } from '@/lib/inventoryService';
+import { findPublicEquipment, recordPublicQrVerification } from '@/lib/publicEquipmentClient';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { StatusBadge } from './StatusBadge';
 
 interface EquipmentVerificationExperienceProps {
@@ -29,10 +31,11 @@ function ReviewField({ label, value }: { label: string; value?: string }) {
 
 export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVerificationExperienceProps) {
   const router = useRouter();
+  const { profile, status: authStatus } = useAuth();
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [verifierName, setVerifierName] = useState('');
   const [verificationComment, setVerificationComment] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [resolveActiveRemark, setResolveActiveRemark] = useState(false);
@@ -44,15 +47,22 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
     let active = true;
     const load = async () => {
       setIsLoading(true);
+      setLoadError(null);
       setSuccessMessage(null);
       setErrorMessage(null);
       setConfirmed(false);
       setResolveActiveRemark(false);
       setShowAllCheckIns(false);
-      const found = propertyNumber ? await findItemByPropertyNumber(propertyNumber) : null;
-      if (active) {
-        setItem(found);
-        setIsLoading(false);
+      try {
+        const found = propertyNumber ? await findPublicEquipment(propertyNumber) : null;
+        if (active) setItem(found);
+      } catch (loadError) {
+        if (active) {
+          setItem(null);
+          setLoadError(loadError instanceof Error ? loadError.message : 'Equipment details are temporarily unavailable.');
+        }
+      } finally {
+        if (active) setIsLoading(false);
       }
     };
     void load();
@@ -60,12 +70,17 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
   }, [propertyNumber]);
 
   const handleVerify = async () => {
-    if (!item || !confirmed || isSaving) return;
+    if (!item || !profile || !confirmed || isSaving) return;
     setIsSaving(true);
     setSuccessMessage(null);
     setErrorMessage(null);
     try {
-      const updated = await recordQrVerification(item, verifierName, verificationComment, resolveActiveRemark);
+      const updated = await recordPublicQrVerification(
+        item,
+        { id: profile.id, email: profile.email, name: profile.name },
+        verificationComment,
+        resolveActiveRemark
+      );
       setItem(updated);
       setConfirmed(false);
       setVerificationComment('');
@@ -97,14 +112,23 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
               <h1 className="text-lg font-bold tracking-tight">Equipment verification</h1>
             </div>
           </div>
-          {/* Back to scanner shortcut */}
-          <a
-            href="/scanner"
-            className="flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/60"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z" /></svg>
-            Scanner
-          </a>
+          <div className="flex shrink-0 items-center gap-2">
+            {profile && item && (
+              <Link
+                href={`/?edit=${encodeURIComponent(item.propertyNumber)}`}
+                className="rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:opacity-90"
+              >
+                Edit asset
+              </Link>
+            )}
+            <a
+              href="/scanner"
+              className="flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/60"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z" /></svg>
+              Scanner
+            </a>
+          </div>
         </header>
 
         {isLoading ? (
@@ -119,7 +143,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3 2 21h20L12 3Z" /></svg>
             </div>
             <h2 className="mt-3 text-base font-bold text-amber-950 dark:text-amber-100">Equipment not found</h2>
-            <p className="mt-1 text-sm leading-relaxed text-amber-800 dark:text-amber-200">This label may be old, or this phone cannot reach the inventory cloud. Ask an ICT administrator to refresh or replace the QR label.</p>
+            <p className="mt-1 text-sm leading-relaxed text-amber-800 dark:text-amber-200">{loadError || 'This label may be old, or this phone cannot reach the inventory cloud. Ask an ICT administrator to refresh or replace the QR label.'}</p>
           </section>
         ) : (
           <div className="space-y-4">
@@ -208,6 +232,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
                           QR verified · {formatDate(checkIn.verifiedAt)}
                           {checkIn.verifiedBy ? ` by ${checkIn.verifiedBy}` : ''}
                         </p>
+                        {checkIn.verifiedByEmail && <p className="mt-0.5 text-[10px] text-zinc-400">{checkIn.verifiedByEmail}</p>}
                         {checkIn.comment && <p className="mt-1 rounded-lg bg-zinc-50 px-2.5 py-2 text-xs leading-relaxed text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">{checkIn.comment}</p>}
                         {checkIn.remarkResolved && (
                           <p className="mt-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
@@ -230,8 +255,13 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
               )}
             </section>
 
-            {/* ── Approval form ── */}
-            <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            {/* Public QR visitors can read the record; only authorized users can record a check-in. */}
+            {authStatus === 'loading' ? (
+              <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="skeleton h-16 rounded-xl" />
+              </section>
+            ) : profile ? (
+              <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex gap-3">
                 <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="m5 13 4 4L19 7" /></svg>
@@ -242,13 +272,9 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
                 </div>
               </div>
 
-              <label className="mt-4 block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">Verified by <span className="font-normal text-zinc-400">optional</span></label>
-              <input
-                value={verifierName}
-                onChange={(e) => setVerifierName(e.target.value)}
-                placeholder="Your name or initials"
-                className="mt-1.5 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-              />
+              <p className="mt-4 rounded-xl bg-zinc-50 px-3 py-2.5 text-xs text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">
+                Verification will be recorded under <span className="font-bold">{profile.name}</span> ({profile.email}).
+              </p>
 
               <label className="mt-4 block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">Verification comment <span className="font-normal text-zinc-400">optional</span></label>
               <textarea
@@ -309,7 +335,14 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
               {errorMessage && (
                 <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-700 dark:bg-rose-950/40 dark:text-rose-200" role="alert">{errorMessage}</p>
               )}
-            </section>
+              </section>
+            ) : (
+              <section className="rounded-3xl border border-blue-100 bg-blue-50/80 p-5 dark:border-blue-900/50 dark:bg-blue-950/25">
+                <h3 className="text-sm font-bold text-blue-950 dark:text-blue-100">Public equipment details</h3>
+                <p className="mt-1 text-xs leading-5 text-blue-800 dark:text-blue-200">Anyone can view this record. Sign in with one of the authorized inventory accounts to verify or edit it.</p>
+                <Link href="/" className="mt-3 inline-flex rounded-lg bg-gradient-to-r from-green-600 to-blue-600 px-3.5 py-2 text-xs font-bold text-white">Administrator sign in</Link>
+              </section>
+            )}
 
             <p className="px-2 text-center text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
               Last verified: {formatDate(item.lastVerifiedAt)}{item.lastVerifiedBy ? ` by ${item.lastVerifiedBy}` : ''} · {item.verificationCount || 0} QR confirmation{item.verificationCount === 1 ? '' : 's'}

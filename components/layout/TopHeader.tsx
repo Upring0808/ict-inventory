@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { SyncStatus } from '@/lib/inventoryService';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 interface TopHeaderProps {
   onOpenMobileMenu: () => void;
@@ -26,7 +27,11 @@ export function TopHeader({
   onRefresh,
   isRefreshing,
 }: TopHeaderProps) {
+  const { profile, signOut } = useAuth();
   const [isDark, setIsDark] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const avatarFailed = Boolean(profile?.avatarUrl && failedAvatarUrl === profile.avatarUrl);
   const themeTransitionTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -218,19 +223,51 @@ export function TopHeader({
             <span className="hidden sm:inline">Export CSV</span>
           </button>
 
-          {/* User Profile / PENRO Badge */}
-          <div className="hidden items-center gap-2 border-l border-zinc-200 pl-1 dark:border-zinc-800 sm:flex">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-xs font-bold text-white shadow-xs">
-              PB
-            </div>
-            <div className="hidden xl:block text-left">
-              <span className="block text-xs font-bold text-zinc-800 dark:text-zinc-200">
-                ICT Unit
+          {/* Authenticated account profile */}
+          <div className="relative border-l border-zinc-200 pl-2 dark:border-zinc-800 sm:pl-3">
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen((open) => !open)}
+              aria-expanded={isProfileOpen}
+              aria-label="Open user profile menu"
+              className="flex max-w-[11rem] items-center gap-2 rounded-xl px-1 py-1 text-left transition hover:bg-zinc-100 dark:hover:bg-zinc-800 sm:max-w-[14rem]"
+            >
+              {profile?.avatarUrl && !avatarFailed ? (
+                // Google profile images are supplied by the authenticated identity.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.avatarUrl}
+                  alt=""
+                  onError={() => setFailedAvatarUrl(profile.avatarUrl || null)}
+                  className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-zinc-200 dark:ring-zinc-700"
+                />
+              ) : (
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-green-600 to-blue-600 text-xs font-bold text-white shadow-xs">
+                  {(profile?.name || profile?.email || 'U').trim().slice(0, 1).toUpperCase()}
+                </span>
+              )}
+              <span className="hidden min-w-0 text-left md:block">
+                <span className="block truncate text-xs font-bold text-zinc-800 dark:text-zinc-200">{profile?.name}</span>
+                <span className="hidden truncate text-[10px] text-zinc-400 xl:block">{profile?.email}</span>
               </span>
-              <span className="block text-[10px] text-zinc-400">
-                PENRO Batanes
-              </span>
-            </div>
+              <svg className="hidden h-3.5 w-3.5 shrink-0 text-zinc-400 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m7 10 5 5 5-5" /></svg>
+            </button>
+            {isProfileOpen && (
+              <div className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-zinc-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                <div className="border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
+                  <p className="truncate text-xs font-bold text-zinc-900 dark:text-zinc-100">{profile?.name}</p>
+                  <p className="mt-0.5 break-all text-[10px] text-zinc-500 dark:text-zinc-400">{profile?.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setIsProfileOpen(false); void signOut(); }}
+                  className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-3H9m0 0 3-3m-3 3 3 3" /></svg>
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -24,6 +24,13 @@ export function createBrowserClient(): SupabaseClient {
     );
   }
 
-  client = createClient(supabaseUrl, supabaseKey);
+  client = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      // OAuth returns a one-time authorization code to /auth/callback, where
+      // the app explicitly exchanges it and validates the allowlisted account.
+      flowType: 'pkce',
+      detectSessionInUrl: false,
+    },
+  });
   return client;
 }

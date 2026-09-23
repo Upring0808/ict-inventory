@@ -11,7 +11,9 @@ export type SidebarTab =
   | 'laptops'
   | 'printers'
   | 'scanners'
-  | 'issues';
+  | 'issues'
+  | 'activity'
+  | 'settings';
 
 interface SidebarProps {
   currentTab: SidebarTab;
@@ -128,6 +130,29 @@ export function Sidebar({
             icon: (
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            ),
+          },
+        ],
+      },
+      {
+        label: 'System',
+        items: [
+          {
+            id: 'activity',
+            label: 'Activity Log',
+            icon: (
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12h3l2-6 4 12 2-6h5M4 5v14h16V5H4Z" />
+              </svg>
+            ),
+          },
+          {
+            id: 'settings',
+            label: 'Settings',
+            icon: (
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm0-5 1.1 1.1 1.8.3 1.4-.6 1.4 1.4-.6 1.4.3 1.8L20 10v2l-1.1 1.1-.3 1.8.6 1.4-1.4 1.4-1.4-.6-1.8.3L12 18.5l-1.1-1.1-1.8-.3-1.4.6-1.4-1.4.6-1.4-.3-1.8L5.5 12v-2l1.1-1.1.3-1.8-.6-1.4 1.4-1.4 1.4.6 1.8-.3L12 3.5Z" />
               </svg>
             ),
           },

@@ -1,6 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { AuthGate } from '@/components/auth/AuthGate';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { AccountSettings } from '@/components/settings/AccountSettings';
+import { ActivityLogView } from '@/components/settings/ActivityLogView';
 import { InventoryItem, FilterState, EquipmentStatusCategory } from '@/types/inventory';
 import {
   loadInventory,
@@ -25,6 +29,15 @@ import { SqlSchemaModal } from '@/components/inventory/SqlSchemaModal';
 import { DeleteConfirmModal } from '@/components/inventory/DeleteConfirmModal';
 
 export default function InventoryDashboard() {
+  return (
+    <AuthGate>
+      <InventoryDashboardContent />
+    </AuthGate>
+  );
+}
+
+function InventoryDashboardContent() {
+  const { profile } = useAuth();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -32,6 +45,7 @@ export default function InventoryDashboard() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const sidebarPreferenceReady = useRef(false);
+  const editRouteHandled = useRef(false);
   const liveRefreshTimer = useRef<number | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     source: 'local',
@@ -107,6 +121,26 @@ export default function InventoryDashboard() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  // QR pages can send an authorized user directly to the selected asset's edit form.
+  useEffect(() => {
+    if (!profile || !items.length || editRouteHandled.current) return;
+    const timer = window.setTimeout(() => {
+      const url = new URL(window.location.href);
+      const propertyNumber = url.searchParams.get('edit');
+      if (!propertyNumber) return;
+      editRouteHandled.current = true;
+      const item = items.find((candidate) => candidate.propertyNumber.toLowerCase() === propertyNumber.toLowerCase());
+      if (item) {
+        setCurrentTab('all');
+        setItemToEdit(item);
+        setIsModalOpen(true);
+      }
+      url.searchParams.delete('edit');
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [items, profile]);
 
   useEffect(() => {
     if (!sidebarPreferenceReady.current) return;
@@ -247,44 +281,56 @@ export default function InventoryDashboard() {
     itemData: Omit<InventoryItem, 'id' | 'createdAt'>,
     id?: string
   ) => {
-    if (id) {
-      // Edit
-      const existing = items.find((i) => i.id === id);
-      if (!existing) return;
-      const updated = await updateItem({ ...existing, ...itemData });
-      setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
-      if (detailItem?.id === id) setDetailItem(updated);
-      showToast(`Updated ${updated.propertyNumber} successfully`);
-    } else {
-      // Create
-      const created = await createItem(itemData);
-      setItems((prev) => [created, ...prev]);
-      showToast(`Added ${created.propertyNumber} to inventory`);
+    try {
+      if (id) {
+        const existing = items.find((i) => i.id === id);
+        if (!existing) return;
+        const updated = await updateItem({ ...existing, ...itemData });
+        setItems((prev) => prev.map((it) => (it.id === id ? updated : it)));
+        if (detailItem?.id === id) setDetailItem(updated);
+        showToast(`Updated ${updated.propertyNumber} successfully`);
+      } else {
+        const created = await createItem(itemData);
+        setItems((prev) => [created, ...prev]);
+        showToast(`Added ${created.propertyNumber} to inventory`);
+      }
+    } catch (saveError) {
+      showToast(saveError instanceof Error ? saveError.message : 'Equipment could not be saved.');
+      throw saveError;
     }
   };
 
   const handleDeleteItem = async (item: InventoryItem) => {
     setIsDeleting(true);
-    await deleteItem(item.id, item.propertyNumber);
-    setItems((prev) => prev.filter((it) => it.id !== item.id));
-    if (detailItem?.id === item.id) setDetailItem(null);
-    setItemToDelete(null);
-    setIsDeleting(false);
-    showToast(`Removed ${item.propertyNumber} from inventory`);
+    try {
+      await deleteItem(item.id, item.propertyNumber);
+      setItems((prev) => prev.filter((it) => it.id !== item.id));
+      if (detailItem?.id === item.id) setDetailItem(null);
+      setItemToDelete(null);
+      showToast(`Removed ${item.propertyNumber} from inventory`);
+    } catch (deleteError) {
+      showToast(deleteError instanceof Error ? deleteError.message : 'Equipment could not be deleted.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleQuickStatusChange = async (
     item: InventoryItem,
     newCategory: EquipmentStatusCategory
   ) => {
-    const updated = await updateItem({
-      ...item,
-      statusCategory: newCategory,
-      status: item.remarks ? `${newCategory} (${item.remarks})` : newCategory,
-    });
-    setItems((prev) => prev.map((it) => (it.id === item.id ? updated : it)));
-    setDetailItem(updated);
-    showToast(`Status updated to "${newCategory}"`);
+    try {
+      const updated = await updateItem({
+        ...item,
+        statusCategory: newCategory,
+        status: item.remarks ? `${newCategory} (${item.remarks})` : newCategory,
+      });
+      setItems((prev) => prev.map((it) => (it.id === item.id ? updated : it)));
+      setDetailItem(updated);
+      showToast(`Status updated to "${newCategory}"`);
+    } catch (updateError) {
+      showToast(updateError instanceof Error ? updateError.message : 'Equipment status could not be updated.');
+    }
   };
 
   const handleExportCsv = () => {
@@ -331,7 +377,7 @@ export default function InventoryDashboard() {
 
         {/* Main Body */}
         <main className={`flex-1 min-h-0 px-4 py-4 sm:px-6 ${
-          currentTab === 'overview'
+          currentTab === 'overview' || currentTab === 'settings' || currentTab === 'activity'
             ? 'overflow-y-auto space-y-5'
             : 'flex flex-col min-h-0 overflow-hidden space-y-3'
         }`}>
@@ -358,6 +404,14 @@ export default function InventoryDashboard() {
                 <div className="skeleton h-56 rounded-2xl" />
                 <div className="skeleton h-56 rounded-2xl" />
               </div>
+            </div>
+          ) : currentTab === 'settings' ? (
+            <div key="settings" className="tab-content">
+              <AccountSettings />
+            </div>
+          ) : currentTab === 'activity' ? (
+            <div key="activity" className="tab-content">
+              <ActivityLogView />
             </div>
           ) : currentTab === 'overview' ? (
             /* Executive Analytics & Graph View — keyed for re-mount fade */
