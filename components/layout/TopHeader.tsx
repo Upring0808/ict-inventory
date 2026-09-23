@@ -60,7 +60,7 @@ export function TopHeader({
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/95 px-4 py-2.5 backdrop-blur-md transition-colors dark:border-zinc-800/70 dark:bg-zinc-950/95 sm:px-6">
+    <header className="sticky top-0 z-30 shrink-0 border-b border-zinc-200/70 bg-white/95 px-4 py-2.5 backdrop-blur-md transition-colors dark:border-zinc-800/70 dark:bg-zinc-950/95 sm:px-6">
       <div className="flex items-center justify-between gap-3">
         {/* Left Side: Mobile toggle + Breadcrumb Title */}
         <div className="flex items-center gap-3">

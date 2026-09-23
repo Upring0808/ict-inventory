@@ -296,7 +296,7 @@ export default function InventoryDashboard() {
   };
 
   return (
-    <div className="flex min-h-screen text-zinc-900 selection:bg-green-500/30 selection:text-white dark:text-zinc-50" style={{ background: 'var(--background)' }}>
+    <div className="flex h-screen w-full overflow-hidden text-zinc-900 selection:bg-green-500/30 selection:text-white dark:text-zinc-50" style={{ background: 'var(--background)' }}>
       {/* SaaS Sidebar Navigation (Google Drive / Fingoals style) */}
       <Sidebar
         currentTab={currentTab}
@@ -315,7 +315,7 @@ export default function InventoryDashboard() {
       />
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-w-0 h-screen overflow-hidden">
         {/* Top Header */}
         <TopHeader
           onOpenMobileMenu={() => setIsMobileOpen(true)}
@@ -330,7 +330,11 @@ export default function InventoryDashboard() {
         />
 
         {/* Main Body */}
-        <main className="flex-1 px-4 py-5 sm:px-6 space-y-5">
+        <main className={`flex-1 min-h-0 px-4 py-4 sm:px-6 ${
+          currentTab === 'overview'
+            ? 'overflow-y-auto space-y-5'
+            : 'flex flex-col min-h-0 overflow-hidden space-y-3'
+        }`}>
           {/* Toast Alert Banner */}
           {toastMessage && (
             <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-900 px-4 py-3 text-xs font-semibold text-white shadow-2xl animate-in slide-in-from-bottom-4 duration-200 dark:border-zinc-700 dark:bg-zinc-100 dark:text-zinc-900">
@@ -373,9 +377,9 @@ export default function InventoryDashboard() {
             </div>
           ) : (
             /* Category / Equipment Inventory View — keyed for re-mount fade */
-            <div key={currentTab} className="tab-content space-y-4">
+            <div key={currentTab} className="tab-content flex flex-1 flex-col min-h-0 overflow-hidden space-y-3">
               {/* Category Header */}
-              <div>
+              <div className="shrink-0">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
                   {currentTab === 'all' && 'All Equipment'}
                   {currentTab === 'desktops' && 'Desktop PCs'}
@@ -390,56 +394,62 @@ export default function InventoryDashboard() {
               </div>
 
               {/* Filter Bar */}
-              <FilterBar
-                filters={filters}
-                onFilterChange={(newFilters) =>
-                  setFilters((prev) => ({ ...prev, ...newFilters }))
-                }
-                onResetFilters={() => {
-                  const tabType =
-                    currentTab === 'desktops' ? 'Desktop Computers' :
-                    currentTab === 'laptops' ? 'Laptop Computers' :
-                    currentTab === 'printers' ? 'Printers' :
-                    currentTab === 'scanners' ? 'Scanners' : '';
-                  const tabStatus = currentTab === 'issues' ? 'Needs Attention' : '';
-                  setFilters({
-                    searchQuery: '',
-                    type: tabType,
-                    location: '',
-                    brand: '',
-                    statusCategory: tabStatus,
-                    shelfLife: '',
-                    year: '',
-                  });
-                }}
-                availableLocations={availableLocations}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                resultCount={filteredItems.length}
-              />
+              <div className="shrink-0 relative z-20">
+                <FilterBar
+                  filters={filters}
+                  onFilterChange={(newFilters) =>
+                    setFilters((prev) => ({ ...prev, ...newFilters }))
+                  }
+                  onResetFilters={() => {
+                    const tabType =
+                      currentTab === 'desktops' ? 'Desktop Computers' :
+                      currentTab === 'laptops' ? 'Laptop Computers' :
+                      currentTab === 'printers' ? 'Printers' :
+                      currentTab === 'scanners' ? 'Scanners' : '';
+                    const tabStatus = currentTab === 'issues' ? 'Needs Attention' : '';
+                    setFilters({
+                      searchQuery: '',
+                      type: tabType,
+                      location: '',
+                      brand: '',
+                      statusCategory: tabStatus,
+                      shelfLife: '',
+                      year: '',
+                    });
+                  }}
+                  availableLocations={availableLocations}
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                  resultCount={filteredItems.length}
+                />
+              </div>
 
               {/* Data View: Table or Grid Cards */}
-              {viewMode === 'table' ? (
-                <EquipmentTable
-                  items={filteredItems}
-                  onViewDetails={(item) => setDetailItem(item)}
-                  onEditItem={(item) => {
-                    setItemToEdit(item);
-                    setIsModalOpen(true);
-                  }}
-                  onDeleteItem={(item) => setItemToDelete(item)}
-                />
-              ) : (
-                <EquipmentCards
-                  items={filteredItems}
-                  onViewDetails={(item) => setDetailItem(item)}
-                  onEditItem={(item) => {
-                    setItemToEdit(item);
-                    setIsModalOpen(true);
-                  }}
-                  onDeleteItem={(item) => setItemToDelete(item)}
-                />
-              )}
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                {viewMode === 'table' ? (
+                  <EquipmentTable
+                    items={filteredItems}
+                    onViewDetails={(item) => setDetailItem(item)}
+                    onEditItem={(item) => {
+                      setItemToEdit(item);
+                      setIsModalOpen(true);
+                    }}
+                    onDeleteItem={(item) => setItemToDelete(item)}
+                  />
+                ) : (
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                    <EquipmentCards
+                      items={filteredItems}
+                      onViewDetails={(item) => setDetailItem(item)}
+                      onEditItem={(item) => {
+                        setItemToEdit(item);
+                        setIsModalOpen(true);
+                      }}
+                      onDeleteItem={(item) => setItemToDelete(item)}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </main>

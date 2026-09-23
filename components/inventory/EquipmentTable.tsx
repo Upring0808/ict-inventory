@@ -91,7 +91,7 @@ function SortableHeader({
   return (
     <th
       onClick={() => onSort(field)}
-      className={`group cursor-pointer select-none px-3 py-3 text-left text-[11px] font-semibold text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 ${className}`}
+      className={`group cursor-pointer select-none bg-inherit px-3 py-3 text-left text-[11px] font-semibold text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 ${className}`}
     >
       <span className="flex items-center gap-0.5">
         {children}
@@ -136,10 +136,10 @@ export function EquipmentTable({
   const paginatedItems = sortedItems.slice(startIndex, startIndex + itemsPerPage);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-xs">
-          <thead className="border-b border-zinc-100 bg-zinc-50/70 dark:border-zinc-800 dark:bg-zinc-950/50">
+    <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex-1 min-h-0 overflow-auto relative">
+        <table className="w-full min-w-[640px] text-left text-xs border-collapse">
+          <thead className="sticky top-0 z-10 border-b border-zinc-200/80 bg-zinc-50/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/95 shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)]">
             <tr>
               <SortableHeader field="propertyNumber" className="pl-4" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Property No.</SortableHeader>
               <SortableHeader field="equipmentType" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Type</SortableHeader>
@@ -147,7 +147,7 @@ export function EquipmentTable({
               <SortableHeader field="accountablePersonnel" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Accountable</SortableHeader>
               <SortableHeader field="location" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Division</SortableHeader>
               <SortableHeader field="statusCategory" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Status</SortableHeader>
-              <th className="px-3 py-3 text-right text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 pr-4">
+              <th className="px-3 py-3 text-right text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 pr-4 bg-inherit">
                 Actions
               </th>
             </tr>
@@ -264,7 +264,7 @@ export function EquipmentTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex flex-col items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/40 px-4 py-2.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/30 sm:flex-row">
+      <div className="shrink-0 flex flex-col items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/40 px-4 py-2.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/30 sm:flex-row">
         <div className="flex items-center gap-2">
           <span className="text-zinc-400">Rows:</span>
           <select
