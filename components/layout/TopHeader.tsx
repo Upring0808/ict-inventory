@@ -60,7 +60,7 @@ export function TopHeader({
   };
 
   return (
-    <header className="sticky top-0 z-30 shrink-0 border-b border-zinc-200/70 bg-white/95 px-4 py-2.5 backdrop-blur-md transition-colors dark:border-zinc-800/70 dark:bg-zinc-950/95 sm:px-6">
+    <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/95 px-4 py-2.5 backdrop-blur-md transition-colors dark:border-zinc-800/70 dark:bg-zinc-950/95 sm:px-6">
       <div className="flex items-center justify-between gap-3">
         {/* Left Side: Mobile toggle + Breadcrumb Title */}
         <div className="flex items-center gap-3">
@@ -191,17 +191,15 @@ export function TopHeader({
           {/* Cloud Sync Button */}
           <button
             onClick={onOpenSqlModal}
-            className={`hidden h-8 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition sm:flex ${
-              syncStatus.source === 'supabase'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
-                : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
-            }`}
+            className={`hidden h-8 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition sm:flex ${syncStatus.source === 'supabase'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
+              : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
+              }`}
             title="Database sync settings"
           >
             <span
-              className={`h-2 w-2 rounded-full ${
-                syncStatus.source === 'supabase' ? 'bg-emerald-500 animate-pulse' : 'bg-blue-600'
-              }`}
+              className={`h-2 w-2 rounded-full ${syncStatus.source === 'supabase' ? 'bg-emerald-500 animate-pulse' : 'bg-blue-600'
+                }`}
             />
             <span className="hidden sm:inline">
               {syncStatus.source === 'supabase' ? 'Supabase Live' : 'Cloud Sync'}
