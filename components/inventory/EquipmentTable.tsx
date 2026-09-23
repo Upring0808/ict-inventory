@@ -17,7 +17,8 @@ type SortField =
   | 'brand'
   | 'location'
   | 'statusCategory'
-  | 'accountablePersonnel';
+  | 'accountablePersonnel'
+  | 'remarks';
 type SortOrder = 'asc' | 'desc';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -100,7 +101,7 @@ export function EquipmentTable({
     <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
       {/* Scrollable Table Area with Sticky Thead */}
       <div className="flex-1 min-h-0 overflow-auto relative">
-        <table className="w-full min-w-[760px] text-left text-xs border-collapse">
+        <table className="w-full min-w-[880px] text-left text-xs border-collapse">
           <thead className="sticky top-0 z-10 border-b-2 border-zinc-300 bg-slate-100/95 backdrop-blur-md dark:border-zinc-700 dark:bg-zinc-950/95 shadow-xs">
             <tr>
               <SortableHeader field="propertyNumber" className="pl-4" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
@@ -121,6 +122,9 @@ export function EquipmentTable({
               <SortableHeader field="statusCategory" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
                 Status
               </SortableHeader>
+              <SortableHeader field="remarks" className="min-w-[200px]" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+                Remarks
+              </SortableHeader>
               <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 pr-4 bg-inherit">
                 Actions
               </th>
@@ -129,7 +133,7 @@ export function EquipmentTable({
           <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {paginatedItems.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-16 text-center">
+                <td colSpan={8} className="py-16 text-center">
                   <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">No equipment found</p>
                   <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Try adjusting your search query or active filters.</p>
                 </td>
@@ -196,58 +200,59 @@ export function EquipmentTable({
                     </td>
 
                     {/* 6. Status: Clear, high-contrast formal badge */}
-                    <td className="px-4 py-2.5">
+                    <td className="whitespace-nowrap px-4 py-2.5">
                       <StatusBadge
                         category={item.statusCategory}
                         rawStatus={item.status}
                         remarks={item.remarks}
                         size="sm"
-                        showRemark={Boolean(item.remarks)}
+                        showRemark={false}
                       />
                     </td>
 
-                    {/* 7. Actions: Quick hover action buttons + subtle 3-dots */}
+                    {/* 7. Remarks / Maintenance Notes: Stretches responsively to display full text */}
+                    <td className="px-4 py-2.5 min-w-[200px]">
+                      {item.remarks ? (
+                        <p
+                          className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-normal break-words"
+                          title={item.remarks}
+                        >
+                          {item.remarks}
+                        </p>
+                      ) : (
+                        <span className="text-xs text-zinc-400 dark:text-zinc-600">—</span>
+                      )}
+                    </td>
+
+                    {/* 8. Actions: View, Edit, and Delete action buttons (shown on row hover) */}
                     <td className="whitespace-nowrap pr-4 pl-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => onViewDetails(item)}
-                            className="rounded-md p-1.5 text-zinc-500 hover:bg-blue-100 hover:text-blue-700 dark:text-zinc-400 dark:hover:bg-blue-950 dark:hover:text-blue-300 transition-colors"
-                            title="View Details"
-                          >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => onEditItem(item)}
-                            className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition-colors"
-                            title="Edit"
-                          >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => onDeleteItem(item)}
-                            className="rounded-md p-1.5 text-zinc-500 hover:bg-red-100 hover:text-red-700 dark:text-zinc-400 dark:hover:bg-red-950 dark:hover:text-red-300 transition-colors"
-                            title="Delete"
-                          >
-                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => onViewDetails(item)}
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-200 hover:text-zinc-800 dark:hover:bg-zinc-700 dark:hover:text-zinc-200 transition-colors"
-                          title="Options"
+                          className="rounded-md p-1.5 text-zinc-500 hover:bg-blue-100 hover:text-blue-700 dark:text-zinc-400 dark:hover:bg-blue-950 dark:hover:text-blue-300 transition-colors"
+                          title="View Details"
                         >
-                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                            <circle cx="12" cy="5" r="1.5" />
-                            <circle cx="12" cy="12" r="1.5" />
-                            <circle cx="12" cy="19" r="1.5" />
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => onEditItem(item)}
+                          className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition-colors"
+                          title="Edit"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => onDeleteItem(item)}
+                          className="rounded-md p-1.5 text-zinc-500 hover:bg-red-100 hover:text-red-700 dark:text-zinc-400 dark:hover:bg-red-950 dark:hover:text-red-300 transition-colors"
+                          title="Delete"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
                       </div>
