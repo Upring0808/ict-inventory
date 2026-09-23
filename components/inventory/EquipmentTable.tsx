@@ -20,58 +20,12 @@ type SortField =
   | 'accountablePersonnel';
 type SortOrder = 'asc' | 'desc';
 
-function getAcquiredYear(yearStr?: string): number | null {
-  if (!yearStr) return null;
-  const match = yearStr.match(/\b(19\d\d|20\d\d)\b/);
-  return match ? parseInt(match[1], 10) : null;
-}
-
-function AgeIndicator({ yearAcquired, shelfLife }: { yearAcquired?: string; shelfLife: string }) {
-  const yr = getAcquiredYear(yearAcquired);
-  const isOld = shelfLife === 'BEYOND 5 YEARS';
-  const currentYear = new Date().getFullYear();
-  const age = yr ? currentYear - yr : null;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
-        isOld ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
-      }`}
-      title={age !== null ? `${age} years old` : undefined}
-    >
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${isOld ? 'bg-amber-500' : 'bg-emerald-500'}`}
-      />
-      {yr ? yr : '—'}
-      {age !== null && (
-        <span className="text-zinc-400 font-normal">({age}yr)</span>
-      )}
-    </span>
-  );
-}
-
-const TYPE_LABELS: Record<string, { short: string; emoji: string }> = {
-  'Desktop Computers': { short: 'Desktop', emoji: '🖥️' },
-  'Laptop Computers': { short: 'Laptop', emoji: '💻' },
-  Printers: { short: 'Printer', emoji: '🖨️' },
-  Scanners: { short: 'Scanner', emoji: '📄' },
+const TYPE_LABELS: Record<string, string> = {
+  'Desktop Computers': 'Desktop PC',
+  'Laptop Computers': 'Laptop',
+  'Printers': 'Printer',
+  'Scanners': 'Scanner',
 };
-
-function SortIcon({
-  field,
-  sortField,
-  sortOrder,
-}: {
-  field: SortField;
-  sortField: SortField;
-  sortOrder: SortOrder;
-}) {
-  return (
-    <span className={`ml-0.5 text-[10px] ${sortField === field ? 'text-blue-600' : 'text-zinc-300 group-hover:text-zinc-400'}`}>
-      {sortField === field ? (sortOrder === 'asc' ? '↑' : '↓') : '↕'}
-    </span>
-  );
-}
 
 function SortableHeader({
   field,
@@ -88,14 +42,21 @@ function SortableHeader({
   sortOrder: SortOrder;
   onSort: (field: SortField) => void;
 }) {
+  const isSorted = sortField === field;
   return (
     <th
       onClick={() => onSort(field)}
-      className={`group cursor-pointer select-none bg-inherit px-3 py-3 text-left text-[11px] font-semibold text-zinc-500 transition hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 ${className}`}
+      className={`group cursor-pointer select-none bg-inherit px-4 py-3 text-left text-xs font-bold uppercase tracking-wider transition ${
+        isSorted
+          ? 'text-zinc-950 dark:text-zinc-50'
+          : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-100'
+      } ${className}`}
     >
-      <span className="flex items-center gap-0.5">
+      <span className="flex items-center gap-1.5">
         {children}
-        <SortIcon field={field} sortField={sortField} sortOrder={sortOrder} />
+        <span className={`text-[10px] ${isSorted ? 'text-blue-600 dark:text-blue-400 font-extrabold' : 'text-zinc-400 dark:text-zinc-600 group-hover:text-zinc-600'}`}>
+          {isSorted ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
+        </span>
       </span>
     </th>
   );
@@ -136,121 +97,157 @@ export function EquipmentTable({
   const paginatedItems = sortedItems.slice(startIndex, startIndex + itemsPerPage);
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+      {/* Scrollable Table Area with Sticky Thead */}
       <div className="flex-1 min-h-0 overflow-auto relative">
-        <table className="w-full min-w-[640px] text-left text-xs border-collapse">
-          <thead className="sticky top-0 z-10 border-b border-zinc-200/80 bg-zinc-50/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/95 shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)]">
+        <table className="w-full min-w-[760px] text-left text-xs border-collapse">
+          <thead className="sticky top-0 z-10 border-b-2 border-zinc-300 bg-slate-100/95 backdrop-blur-md dark:border-zinc-700 dark:bg-zinc-950/95 shadow-xs">
             <tr>
-              <SortableHeader field="propertyNumber" className="pl-4" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Property No.</SortableHeader>
-              <SortableHeader field="equipmentType" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Type</SortableHeader>
-              <SortableHeader field="brand" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Model / Brand</SortableHeader>
-              <SortableHeader field="accountablePersonnel" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Accountable</SortableHeader>
-              <SortableHeader field="location" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Division</SortableHeader>
-              <SortableHeader field="statusCategory" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>Status</SortableHeader>
-              <th className="px-3 py-3 text-right text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 pr-4 bg-inherit">
+              <SortableHeader field="propertyNumber" className="pl-4" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+                Property No.
+              </SortableHeader>
+              <SortableHeader field="brand" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+                Equipment & Model
+              </SortableHeader>
+              <SortableHeader field="equipmentType" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+                Type
+              </SortableHeader>
+              <SortableHeader field="accountablePersonnel" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+                Accountable Officer
+              </SortableHeader>
+              <SortableHeader field="location" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+                Office / Division
+              </SortableHeader>
+              <SortableHeader field="statusCategory" sortField={sortField} sortOrder={sortOrder} onSort={handleSort}>
+                Status
+              </SortableHeader>
+              <th className="px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 pr-4 bg-inherit">
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100/80 dark:divide-zinc-800/60">
+          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {paginatedItems.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-16 text-center">
-                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">No equipment found</p>
-                  <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Try adjusting your search or filters.</p>
+                  <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">No equipment found</p>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Try adjusting your search query or active filters.</p>
                 </td>
               </tr>
             ) : (
               paginatedItems.map((item, idx) => {
-                const typeInfo = TYPE_LABELS[item.equipmentType] ?? { short: item.equipmentType, emoji: '🔧' };
+                const typeLabel = TYPE_LABELS[item.equipmentType] ?? item.equipmentType;
                 return (
                   <tr
                     key={item.id}
                     onClick={() => onViewDetails(item)}
-                    className="group cursor-pointer transition hover:bg-zinc-50/60 dark:hover:bg-zinc-800/30 row-animate"
-                    style={{ animationDelay: `${Math.min(idx, 20) * 18}ms` }}
+                    className="group cursor-pointer transition-colors even:bg-white odd:bg-slate-50/50 hover:bg-blue-50/70 dark:even:bg-zinc-900 dark:odd:bg-zinc-900/60 dark:hover:bg-zinc-800/80 row-animate"
+                    style={{ animationDelay: `${Math.min(idx, 20) * 16}ms` }}
                   >
-                    {/* Property Number + Serial Number + Age dot */}
-                    <td className="whitespace-nowrap pl-4 pr-3 py-3">
-                      <p className="font-mono text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[150px]" title={item.propertyNumber}>
+                    {/* 1. Property Number + Serial Number */}
+                    <td className="whitespace-nowrap pl-4 pr-3 py-2.5">
+                      <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-50 truncate max-w-[160px] group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={item.propertyNumber}>
                         {item.propertyNumber}
                       </p>
-                      {item.serialNumber && (
-                        <p className="font-mono text-[10px] text-zinc-400 dark:text-zinc-500 truncate max-w-[150px]" title={`S/N: ${item.serialNumber}`}>
-                          S/N: {item.serialNumber}
+                      {item.serialNumber ? (
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate max-w-[160px]" title={`Serial No: ${item.serialNumber}`}>
+                          SN: {item.serialNumber}
                         </p>
+                      ) : (
+                        <p className="text-[11px] text-zinc-400 dark:text-zinc-600">—</p>
                       )}
-                      <AgeIndicator yearAcquired={item.yearAcquired} shelfLife={item.shelfLife} />
                     </td>
 
-                    {/* Type */}
-                    <td className="whitespace-nowrap px-3 py-3">
-                      <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                        {typeInfo.emoji} {typeInfo.short}
+                    {/* 2. Model + Brand / Specs */}
+                    <td className="px-4 py-2.5">
+                      <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-50 truncate max-w-[220px]" title={item.model}>
+                        {item.model}
+                      </p>
+                      <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400 truncate max-w-[220px]">
+                        <span>{item.brand}</span>
+                        {item.computerName && (
+                          <>
+                            <span>·</span>
+                            <span className="truncate" title={item.computerName}>{item.computerName}</span>
+                          </>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* 3. Type: Formal Office Badge */}
+                    <td className="whitespace-nowrap px-4 py-2.5">
+                      <span className="inline-flex items-center rounded-md border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200">
+                        {typeLabel}
                       </span>
                     </td>
 
-                    {/* Model + Brand */}
-                    <td className="px-3 py-3">
-                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[200px]" title={item.model}>
-                        {item.model}
-                      </p>
-                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{item.brand}</p>
-                    </td>
-
-                    {/* Acquired year — now shown as part of Property No. cell above; this col shows accountable */}
-                    <td className="whitespace-nowrap px-3 py-3">
-                      <p className="text-xs text-zinc-700 dark:text-zinc-300 truncate max-w-[130px]" title={item.accountablePersonnel}>
+                    {/* 4. Accountable Officer */}
+                    <td className="whitespace-nowrap px-4 py-2.5">
+                      <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100 truncate max-w-[170px]" title={item.accountablePersonnel}>
                         {item.accountablePersonnel}
                       </p>
                     </td>
 
-                    {/* Division / Location */}
-                    <td className="whitespace-nowrap px-3 py-3">
-                      <span className="inline-flex rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                    {/* 5. Location / Office: Distinct high-contrast badge */}
+                    <td className="whitespace-nowrap px-4 py-2.5">
+                      <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 max-w-[160px] truncate" title={item.location}>
                         {item.location}
                       </span>
                     </td>
 
-                    {/* Status */}
-                    <td className="px-3 py-3">
+                    {/* 6. Status: Clear, high-contrast formal badge */}
+                    <td className="px-4 py-2.5">
                       <StatusBadge
                         category={item.statusCategory}
                         rawStatus={item.status}
                         remarks={item.remarks}
                         size="sm"
+                        showRemark={Boolean(item.remarks)}
                       />
                     </td>
 
-                    {/* Actions */}
-                    <td className="whitespace-nowrap pr-4 pl-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* 7. Actions: Quick hover action buttons + subtle 3-dots */}
+                    <td className="whitespace-nowrap pr-4 pl-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => onViewDetails(item)}
+                            className="rounded-md p-1.5 text-zinc-500 hover:bg-blue-100 hover:text-blue-700 dark:text-zinc-400 dark:hover:bg-blue-950 dark:hover:text-blue-300 transition-colors"
+                            title="View Details"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => onEditItem(item)}
+                            className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition-colors"
+                            title="Edit"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => onDeleteItem(item)}
+                            className="rounded-md p-1.5 text-zinc-500 hover:bg-red-100 hover:text-red-700 dark:text-zinc-400 dark:hover:bg-red-950 dark:hover:text-red-300 transition-colors"
+                            title="Delete"
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                         <button
                           onClick={() => onViewDetails(item)}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/40 dark:hover:text-blue-400"
-                          title="View Details"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-200 hover:text-zinc-800 dark:hover:bg-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                          title="Options"
                         >
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => onEditItem(item)}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                          title="Edit"
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => onDeleteItem(item)}
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-                          title="Delete"
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="5" r="1.5" />
+                            <circle cx="12" cy="12" r="1.5" />
+                            <circle cx="12" cy="19" r="1.5" />
                           </svg>
                         </button>
                       </div>
@@ -264,48 +261,48 @@ export function EquipmentTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="shrink-0 flex flex-col items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50/40 px-4 py-2.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/30 sm:flex-row">
+      <div className="shrink-0 flex flex-col items-center justify-between gap-3 border-t border-zinc-300 bg-slate-100/90 px-4 py-2.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 sm:flex-row">
         <div className="flex items-center gap-2">
-          <span className="text-zinc-400">Rows:</span>
+          <span className="font-semibold text-zinc-600 dark:text-zinc-400">Rows per page:</span>
           <select
             value={itemsPerPage}
             onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-semibold text-zinc-800 shadow-2xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
           >
             <option value={15}>15</option>
             <option value={25}>25</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
           </select>
-          <span className="hidden sm:inline text-zinc-400">
-            {items.length === 0 ? 0 : startIndex + 1}–{Math.min(startIndex + itemsPerPage, items.length)} of {items.length}
+          <span className="hidden sm:inline font-medium text-zinc-600 dark:text-zinc-400 ml-1">
+            {items.length === 0 ? 0 : startIndex + 1}–{Math.min(startIndex + itemsPerPage, items.length)} of {items.length} units
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 font-medium">
           <button
             onClick={() => setCurrentPage(1)}
             disabled={currentPage === 1}
-            className="rounded-lg border border-zinc-200 px-2 py-1 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-800"
-          >«</button>
+            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          >« First</button>
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="rounded-lg border border-zinc-200 px-2.5 py-1 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-800"
-          >Prev</button>
-          <span className="px-2 font-semibold text-zinc-700 dark:text-zinc-300">
-            {currentPage} / {totalPages}
+            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          >Previous</button>
+          <span className="px-2 font-bold text-zinc-900 dark:text-zinc-50 text-xs">
+            {currentPage} of {totalPages}
           </span>
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
-            className="rounded-lg border border-zinc-200 px-2.5 py-1 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
           >Next</button>
           <button
             onClick={() => setCurrentPage(totalPages)}
             disabled={currentPage >= totalPages}
-            className="rounded-lg border border-zinc-200 px-2 py-1 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-800"
-          >»</button>
+            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          >Last »</button>
         </div>
       </div>
     </div>

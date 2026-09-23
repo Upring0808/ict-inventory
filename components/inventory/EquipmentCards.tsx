@@ -49,7 +49,7 @@ export function EquipmentCards({
                     : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
                 }`}
               >
-                {isBeyond5 ? '⏰ > 5 Yrs' : '🛡️ < 5 Yrs'}
+                {isBeyond5 ? '> 5 Yrs' : '< 5 Yrs'}
               </span>
             </div>
 

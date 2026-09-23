@@ -41,7 +41,7 @@ export function FilterBar({
 
   const yearOptions: DropdownOption[] = [
     { value: '', label: 'All Years' },
-    { value: '5_YEARS_OLD', label: '⏰ Aging (5+ years)' },
+    { value: '5_YEARS_OLD', label: 'Aging (5+ years)' },
     { value: '2025', label: '2025' },
     { value: '2024', label: '2024' },
     { value: '2023', label: '2023' },
