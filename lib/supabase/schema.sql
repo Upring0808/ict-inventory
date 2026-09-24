@@ -156,7 +156,7 @@ begin
     v_old := to_jsonb(old);
     v_new := to_jsonb(new);
     for v_key, v_value in select key, value from jsonb_each(v_new) loop
-      if v_key not in ('id', 'email', 'auth_user_id', 'created_at', 'updated_at', 'password_updated_at')
+      if v_key not in ('id', 'auth_user_id', 'created_at', 'updated_at', 'password_updated_at')
         and v_value is distinct from (v_old -> v_key) then
         v_details := v_details || jsonb_build_object(
           v_key,
@@ -236,7 +236,8 @@ begin
     return v_id;
   elsif p_operation = 'update' then
     update public.authorized_accounts
-    set username = nullif(lower(trim(coalesce(p_username, ''))), ''),
+    set email = lower(trim(p_email)),
+        username = nullif(lower(trim(coalesce(p_username, ''))), ''),
         full_name = trim(p_full_name),
         password_updated_at = case
           when p_password_updated then timezone('utc'::text, now())

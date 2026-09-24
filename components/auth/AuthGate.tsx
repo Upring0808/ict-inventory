@@ -50,7 +50,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <LoginScreen
         onPasswordSignIn={({ emailOrUsername, password }) => auth.signInWithPassword(emailOrUsername, password)}
         onGoogleSignIn={auth.signInWithGoogle}
-        isLoading={auth.isLoading}
+        loadingMethod={auth.loadingMethod}
         error={auth.error}
       />
     );

@@ -2,8 +2,22 @@
 
 import React, { useEffect, useState } from 'react';
 import { createBrowserClient } from '@/lib/supabase/client';
+import type { Session } from '@supabase/supabase-js';
 
 const LOGIN_ERROR_KEY = 'ict_inventory_login_error';
+const callbackSessions = new Map<string, Promise<Session>>();
+
+function exchangeCallbackCodeOnce(code: string): Promise<Session> {
+  const pending = callbackSessions.get(code);
+  if (pending) return pending;
+
+  const exchange = createBrowserClient().auth.exchangeCodeForSession(code).then(({ data, error }) => {
+    if (error || !data.session) throw error || new Error('Google sign-in did not return a valid session.');
+    return data.session;
+  });
+  callbackSessions.set(code, exchange);
+  return exchange;
+}
 
 export function AuthCallback({ code, providerError }: { code: string | null; providerError: string | null }) {
   const [message, setMessage] = useState('Validating your authorized account…');
@@ -12,18 +26,19 @@ export function AuthCallback({ code, providerError }: { code: string | null; pro
     let active = true;
     const complete = async () => {
       try {
-        const client = createBrowserClient();
         if (providerError) throw new Error('Google sign-in could not be completed. Use an account registered in Settings.');
         if (!code) throw new Error('Google sign-in did not return a valid session. Please try again.');
 
-        const { data, error } = await client.auth.exchangeCodeForSession(code);
-        if (error || !data.session) throw error || new Error('Google sign-in did not return a valid session.');
+        const session = await exchangeCallbackCodeOnce(code);
 
         const response = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${data.session.access_token}` },
+          headers: { Authorization: `Bearer ${session.access_token}` },
           cache: 'no-store',
         });
-        if (!response.ok) throw new Error('This Google account is not registered as an authorized inventory user.');
+        if (!response.ok) {
+          if (response.status !== 401 && response.status !== 403) throw new Error('Could not check this account right now. Check your connection and try again.');
+          throw new Error('This Google account is not registered as an authorized inventory user.');
+        }
 
         window.location.replace('/');
       } catch (callbackError) {

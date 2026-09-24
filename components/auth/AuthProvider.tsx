@@ -12,11 +12,12 @@ export interface AuthProfile {
 }
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'setup_required' | 'unavailable';
+export type AuthLoadingMethod = 'password' | 'google' | null;
 
 interface AuthContextValue {
   status: AuthStatus;
   profile: AuthProfile | null;
-  isLoading: boolean;
+  loadingMethod: AuthLoadingMethod;
   error: string | null;
   signInWithPassword: (emailOrUsername: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -26,6 +27,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const LOGIN_ERROR_KEY = 'ict_inventory_login_error';
+
+type SessionValidation = 'authorized' | 'rejected' | 'unavailable';
 
 async function responseError(response: Response, fallback: string): Promise<string> {
   try {
@@ -40,8 +43,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clientRef = useRef<ReturnType<typeof createBrowserClient> | null>(null);
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [profile, setProfile] = useState<AuthProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMethod, setLoadingMethod] = useState<AuthLoadingMethod>(null);
   const [error, setError] = useState<string | null>(null);
+  const googleLoadingTimerRef = useRef<number | null>(null);
+
+  const clearGoogleLoading = useCallback(() => {
+    if (googleLoadingTimerRef.current !== null) {
+      window.clearTimeout(googleLoadingTimerRef.current);
+      googleLoadingTimerRef.current = null;
+    }
+    setLoadingMethod((current) => current === 'google' ? null : current);
+  }, []);
 
   const setSignedOutState = useCallback(async (configurationError?: string) => {
     setProfile(null);
@@ -82,39 +94,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (!response.ok) {
         const message = await responseError(response, 'This Google account is not on the authorized account list.');
+        if (response.status !== 401 && response.status !== 403) {
+          setProfile(null);
+          setStatus('unauthenticated');
+          setError('The sign-in service could not verify your account just now. Please try again.');
+          return 'unavailable' satisfies SessionValidation;
+        }
         if (typeof window !== 'undefined') window.sessionStorage.setItem(LOGIN_ERROR_KEY, message);
         setProfile(null);
         setStatus('unauthenticated');
         await clientRef.current?.auth.signOut();
         setError(message);
-        return false;
+        return 'rejected' satisfies SessionValidation;
       }
 
       const nextProfile = await response.json() as AuthProfile;
       setProfile(nextProfile);
       setError(null);
       setStatus('authenticated');
-      return true;
+      return 'authorized' satisfies SessionValidation;
     } catch {
       setProfile(null);
-      setStatus('unavailable');
-      setError('Could not validate this account. Check your connection and try again.');
-      return false;
+      setStatus('unauthenticated');
+      setError('Could not validate your account right now. Check your connection and try again.');
+      return 'unavailable' satisfies SessionValidation;
     }
   }, []);
 
   useEffect(() => {
     let active = true;
+    const handlePageShow = (event: PageTransitionEvent) => {
+      // A page restored from the back-forward cache keeps its React state.
+      // Clear the pending OAuth state so the user can choose another method.
+      if (event.persisted) clearGoogleLoading();
+    };
+    window.addEventListener('pageshow', handlePageShow);
     try {
       const client = createBrowserClient();
       clientRef.current = client;
       const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
         if (!active) return;
         if (event === 'SIGNED_OUT' || !session) {
+          clearGoogleLoading();
           window.setTimeout(() => {
             if (active) void setSignedOutState();
           }, 0);
-        } else if (event !== 'INITIAL_SESSION') {
+        } else if (event !== 'INITIAL_SESSION' && event !== 'SIGNED_IN') {
+          // Password sign-in validates explicitly after setSession. OAuth
+          // validates on its callback page and again on the root page load.
+          // Skipping SIGNED_IN here prevents duplicate, racing checks.
           window.setTimeout(() => {
             if (active) void validateSession(session);
           }, 0);
@@ -134,18 +162,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return () => {
         active = false;
+        window.removeEventListener('pageshow', handlePageShow);
         subscription.unsubscribe();
       };
     } catch (clientError) {
       const message = clientError instanceof Error ? clientError.message : 'Supabase is not configured.';
       window.setTimeout(() => { void setSignedOutState(message); }, 0);
-      return () => { active = false; };
+      return () => {
+        active = false;
+        window.removeEventListener('pageshow', handlePageShow);
+      };
     }
-  }, [setSignedOutState, validateSession]);
+  }, [clearGoogleLoading, setSignedOutState, validateSession]);
 
   const signInWithPassword = useCallback(async (emailOrUsername: string, password: string) => {
     setError(null);
-    setIsLoading(true);
+    setLoadingMethod('password');
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
@@ -159,17 +191,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clientRef.current = client;
       const { data, error: sessionError } = await client.auth.setSession(tokens);
       if (sessionError || !data.session) throw new Error('Sign-in could not be completed. Try again.');
-      if (!await validateSession(data.session)) throw new Error('This account is not authorized to use the dashboard.');
+      const validation = await validateSession(data.session);
+      if (validation === 'rejected') throw new Error('This account is not authorized to use the dashboard.');
+      if (validation === 'unavailable') throw new Error('Your credentials were accepted, but access could not be checked right now. Please try signing in again.');
     } catch (signInError) {
       setError(signInError instanceof Error ? signInError.message : 'Sign-in failed. Try again.');
     } finally {
-      setIsLoading(false);
+      setLoadingMethod((current) => current === 'password' ? null : current);
     }
   }, [validateSession]);
 
   const signInWithGoogle = useCallback(async () => {
     setError(null);
-    setIsLoading(true);
+    clearGoogleLoading();
+    setLoadingMethod('google');
     try {
       const client = clientRef.current || createBrowserClient();
       clientRef.current = client;
@@ -181,32 +216,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
       if (oauthError) throw oauthError;
+      // OAuth should navigate away immediately. This fallback recovers the
+      // login form if the redirect is blocked or the provider never opens.
+      googleLoadingTimerRef.current = window.setTimeout(clearGoogleLoading, 15_000);
     } catch (oauthError) {
       setError(oauthError instanceof Error ? oauthError.message : 'Google sign-in could not be started.');
-      setIsLoading(false);
+      clearGoogleLoading();
     }
-  }, []);
+  }, [clearGoogleLoading]);
 
   const signOut = useCallback(async () => {
     setError(null);
+    clearGoogleLoading();
     try {
       await clientRef.current?.auth.signOut();
     } finally {
       setProfile(null);
       setStatus('unauthenticated');
     }
-  }, []);
+  }, [clearGoogleLoading]);
 
   const value = useMemo<AuthContextValue>(() => ({
     status,
     profile,
-    isLoading,
+    loadingMethod,
     error,
     signInWithPassword,
     signInWithGoogle,
     signOut,
     clearError: () => setError(null),
-  }), [status, profile, isLoading, error, signInWithPassword, signInWithGoogle, signOut]);
+  }), [status, profile, loadingMethod, error, signInWithPassword, signInWithGoogle, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

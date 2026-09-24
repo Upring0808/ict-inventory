@@ -108,6 +108,39 @@ export async function deleteAuthUser(userId: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Repairs a missing/stale Auth identity link only after a verified Auth user
+ * has presented the exact email already approved in authorized_accounts.
+ */
+export async function ensureAuthorizedIdentityLink(
+  accountId: string,
+  currentAuthUserId: string | null,
+  verifiedAuthUserId: string
+): Promise<boolean> {
+  if (currentAuthUserId === verifiedAuthUserId) return true;
+
+  const admin = createAdminClient();
+  const updateQuery = admin
+    .from('authorized_accounts')
+    .update({ auth_user_id: verifiedAuthUserId, updated_at: new Date().toISOString() })
+    .eq('id', accountId);
+  const { data: linkedAccount, error: linkError } = currentAuthUserId
+    ? await updateQuery.eq('auth_user_id', currentAuthUserId).select('auth_user_id').maybeSingle()
+    : await updateQuery.is('auth_user_id', null).select('auth_user_id').maybeSingle();
+
+  if (linkError) throw linkError;
+  if (linkedAccount) return linkedAccount.auth_user_id === verifiedAuthUserId;
+
+  // Another sign-in may have repaired the same row concurrently.
+  const { data: latestAccount, error: refreshError } = await admin
+    .from('authorized_accounts')
+    .select('auth_user_id')
+    .eq('id', accountId)
+    .maybeSingle();
+  if (refreshError) throw refreshError;
+  return latestAccount?.auth_user_id === verifiedAuthUserId;
+}
+
 export async function getAuthorizedActor(request: Request): Promise<AuthorizedActor | null> {
   const authorization = request.headers.get('authorization');
   const match = authorization?.match(/^Bearer\s+(.+)$/i);
@@ -117,16 +150,18 @@ export async function getAuthorizedActor(request: Request): Promise<AuthorizedAc
   const authClient = createPublicAuthClient();
   const { data: { user }, error: authError } = await authClient.auth.getUser(token);
   if (authError || !user?.email || !user.email_confirmed_at) return null;
+  const userEmail = normalizeEmail(user.email);
 
   const admin = createAdminClient();
-  const { data: account, error } = await admin
+  const { data: accounts, error } = await admin
     .from('authorized_accounts')
     .select('id,email,username,full_name,auth_user_id,created_at')
-    .eq('email', normalizeEmail(user.email))
-    .maybeSingle();
+    .limit(2);
 
   if (error) throw error;
-  if (!account || account.auth_user_id !== user.id) return null;
+  const account = accounts?.find((candidate) => normalizeEmail(candidate.email) === userEmail);
+  if (!account) return null;
+  if (!await ensureAuthorizedIdentityLink(account.id, account.auth_user_id, user.id)) return null;
 
   const metadata = user.user_metadata as Record<string, unknown> | null;
   const avatarUrl = typeof metadata?.avatar_url === 'string'
