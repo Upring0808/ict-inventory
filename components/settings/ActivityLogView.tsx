@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { authorizedApiFetch, readApiError } from '@/lib/auth/client';
 
 interface ActivityEvent {
   id: number;
   actor_name: string;
   actor_email: string;
+  actor_avatar_url?: string | null;
   action: string;
   target_type: 'equipment' | 'account';
   target_label: string;
@@ -39,25 +41,108 @@ function printable(value: unknown): string {
   return String(value);
 }
 
+function localDayRange(dateValue: string): { from: string; to: string } | null {
+  const parts = dateValue.split('-').map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) return null;
+
+  const [year, month, day] = parts;
+  if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const nextDay = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(nextDay.getTime())) return null;
+
+  return {
+    from: start.toISOString(),
+    // The API uses an exclusive upper bound, so include the next midnight.
+    to: nextDay.toISOString(),
+  };
+}
+
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function actionTone(action: string): string {
+  if (action.endsWith('deleted')) return 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/35 dark:text-red-300';
+  if (action.endsWith('verified') || action.endsWith('created')) return 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/35 dark:text-emerald-300';
+  return 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/35 dark:text-blue-300';
+}
+
 export function ActivityLogView() {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const latestRequest = useRef(0);
 
   const loadEvents = useCallback(async () => {
+    const requestId = ++latestRequest.current;
     setIsLoading(true);
+    setIsLoadingMore(false);
     setError(null);
+    setEvents([]);
+    setTotal(0);
+    setHasMore(false);
+
     try {
-      const response = await authorizedApiFetch('/api/admin/activity?limit=100');
+      const range = selectedDate ? localDayRange(selectedDate) : null;
+      const params = new URLSearchParams({ limit: '60', offset: '0' });
+      if (range) {
+        params.set('from', range.from);
+        params.set('to', range.to);
+      }
+      const query = `?${params.toString()}`;
+      const response = await authorizedApiFetch(`/api/admin/activity${query}`);
       if (!response.ok) throw new Error(await readApiError(response, 'Could not load activity history.'));
-      const result = await response.json() as { events: ActivityEvent[] };
-      setEvents(result.events);
+      const result = await response.json() as { events: ActivityEvent[]; total: number; hasMore: boolean };
+      if (requestId === latestRequest.current) {
+        setEvents(result.events);
+        setTotal(result.total);
+        setHasMore(result.hasMore);
+      }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load activity history.');
+      if (requestId === latestRequest.current) {
+        setError(loadError instanceof Error ? loadError.message : 'Could not load activity history.');
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === latestRequest.current) setIsLoading(false);
     }
-  }, []);
+  }, [selectedDate]);
+
+  const loadMore = async () => {
+    if (isLoadingMore || !hasMore) return;
+    const requestId = latestRequest.current;
+    setIsLoadingMore(true);
+    try {
+      const params = new URLSearchParams({ limit: '60', offset: String(events.length) });
+      const range = selectedDate ? localDayRange(selectedDate) : null;
+      if (range) {
+        params.set('from', range.from);
+        params.set('to', range.to);
+      }
+      const response = await authorizedApiFetch(`/api/admin/activity?${params.toString()}`);
+      if (!response.ok) throw new Error(await readApiError(response, 'Could not load more activity.'));
+      const result = await response.json() as { events: ActivityEvent[]; total: number; hasMore: boolean };
+      if (requestId === latestRequest.current) {
+        setEvents((current) => [...current, ...result.events]);
+        setTotal(result.total);
+        setHasMore(result.hasMore);
+      }
+    } catch (loadError) {
+      if (requestId === latestRequest.current) {
+        setError(loadError instanceof Error ? loadError.message : 'Could not load more activity.');
+      }
+    } finally {
+      if (requestId === latestRequest.current) setIsLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void loadEvents(); }, 0);
@@ -65,72 +150,156 @@ export function ActivityLogView() {
   }, [loadEvents]);
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <section className="mx-auto w-full max-w-5xl space-y-5 pb-4 sm:space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Transparency</p>
-          <h2 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Activity log</h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">A record of who changed or verified equipment and when.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-400">Transparency</p>
+          <h2 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl">Activity log</h2>
+          <p className="mt-1.5 text-sm leading-5 text-zinc-600 dark:text-zinc-400">A record of who changed or verified equipment and when.</p>
         </div>
-        <button type="button" onClick={() => void loadEvents()} disabled={isLoading} className="rounded-xl border border-zinc-200 bg-white px-3.5 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">Refresh</button>
+
+        <div className="flex flex-wrap items-end gap-2.5">
+          <label htmlFor="activity-date" className="block">
+            <span className="mb-1 block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">Filter by day</span>
+            <input
+              id="activity-date"
+              type="date"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className="min-h-11 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 shadow-sm outline-none transition hover:border-zinc-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600"
+            />
+          </label>
+          {selectedDate ? (
+            <button
+              type="button"
+              onClick={() => setSelectedDate('')}
+              className="min-h-11 rounded-xl px-2.5 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-200/70 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              Clear date
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void loadEvents()}
+            disabled={isLoading}
+            className="min-h-11 rounded-xl border border-zinc-200 bg-white px-3.5 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Refresh
+          </button>
+        </div>
       </header>
 
-      {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">{error}</p>}
+      {error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">{error}</p> : null}
 
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800 sm:px-5">
+          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{selectedDate ? `Activity for ${selectedDate}` : 'Recent activity'}</p>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{isLoading ? 'Loading…' : `${events.length} of ${total} ${total === 1 ? 'event' : 'events'}`}</p>
+        </div>
+
         {isLoading ? (
-          <div className="space-y-3 p-5"><div className="skeleton h-14 rounded-xl" /><div className="skeleton h-14 rounded-xl" /><div className="skeleton h-14 rounded-xl" /></div>
+          <div className="space-y-2 p-4 sm:p-5" role="status" aria-label="Loading activity">
+            <div className="skeleton h-16 rounded-xl" />
+            <div className="skeleton h-16 rounded-xl" />
+            <div className="skeleton h-16 rounded-xl" />
+          </div>
         ) : events.length ? (
           <ol className="divide-y divide-zinc-100 dark:divide-zinc-800">
             {events.map((event) => {
               const details = event.details || {};
-              const changes = Object.entries(details).filter(([key]) => key !== 'record' && key !== 'verification' && key !== 'password_reset');
+              const changes = Object.entries(details).filter(([key]) => ![
+                'record', 'verification', 'password_reset', 'password', 'secret', 'access_token', 'refresh_token',
+              ].includes(key.toLowerCase()));
               const verification = details.verification && typeof details.verification === 'object'
                 ? details.verification as Record<string, unknown>
                 : null;
+              const actorName = event.actor_name?.trim() || event.actor_email || 'Unknown user';
+              const targetLabel = event.equipment_property_number || event.target_label || 'Inventory record';
+              const occurredAt = new Date(event.occurred_at);
+              const formattedTime = Number.isNaN(occurredAt.getTime())
+                ? event.occurred_at
+                : new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(occurredAt);
+
               return (
-                <li key={event.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-5">
-                  <div className="flex min-w-0 gap-3">
-                    <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${event.action.endsWith('deleted') ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300' : event.action.endsWith('verified') ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'}`}>
-                      {event.target_type === 'equipment' ? (
-                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 13.5v-7ZM8 20h8m-4-4v4" strokeWidth="1.7" strokeLinecap="round" /></svg>
-                      ) : <span className="text-xs font-bold">U</span>}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{actionLabel(event.action)}</p>
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">{event.equipment_property_number || event.target_label}</span>
-                      </div>
-                      <p className="mt-1 break-all text-xs text-zinc-600 dark:text-zinc-400">{event.actor_name} <span className="text-zinc-400">·</span> {event.actor_email}</p>
-                      {details.record !== undefined && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{printable(details.record)}</p>}
-                      {details.password_reset === true && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Password reset</p>}
-                      {verification && typeof verification.comment === 'string' && verification.comment && <p className="mt-2 rounded-lg bg-zinc-50 px-3 py-2 text-xs leading-5 text-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-300">{verification.comment}</p>}
-                      {changes.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {changes.map(([key, value]) => {
-                            const change = value && typeof value === 'object' ? value as Record<string, unknown> : null;
-                            if (change && 'from' in change && 'to' in change) {
-                              return <span key={key} className="rounded-lg bg-zinc-50 px-2 py-1 text-[10px] text-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-300"><span className="font-bold">{fieldLabel(key)}:</span> {printable(change.from)} → {printable(change.to)}</span>;
-                            }
-                            return <span key={key} className="rounded-lg bg-zinc-50 px-2 py-1 text-[10px] text-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-300"><span className="font-bold">{fieldLabel(key)}</span>: {printable(value)}</span>;
-                          })}
-                        </div>
-                      )}
+                <li key={event.id} className="grid grid-cols-2 items-center gap-x-3 gap-y-2.5 px-3.5 py-3.5 sm:gap-3 sm:px-4 md:grid-cols-[minmax(0,1.2fr)_minmax(7rem,0.75fr)_minmax(8rem,1fr)_auto] md:gap-4 md:px-5">
+                  <div className="col-span-2 flex min-w-0 items-center gap-3 md:col-span-1">
+                    <ActorAvatar name={actorName} imageUrl={event.actor_avatar_url} key={event.actor_avatar_url || 'no-avatar'} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{actorName}</p>
+                      <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{event.actor_email || 'Authorized user'}</p>
                     </div>
                   </div>
-                  <time dateTime={event.occurred_at} className="pl-12 text-[11px] font-medium text-zinc-400 sm:pl-0 sm:text-right">{new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(event.occurred_at))}</time>
+
+                  <div className="min-w-0">
+                    <span className={`inline-flex max-w-full rounded-lg border px-2 py-1 text-[11px] font-semibold leading-4 ${actionTone(event.action)}`}>
+                      <span className="truncate">{actionLabel(event.action)}</span>
+                    </span>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{event.target_type === 'equipment' ? 'Equipment' : 'User account'}</p>
+                    <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200" title={targetLabel}>{targetLabel}</p>
+                  </div>
+
+                  <time dateTime={event.occurred_at} className="col-span-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 md:col-span-1 md:text-right">
+                    {formattedTime}
+                  </time>
+
+                  {(details.record !== undefined || details.password_reset === true || (verification && typeof verification.comment === 'string' && verification.comment) || changes.length > 0) ? (
+                    <details className="col-span-2 border-t border-zinc-100 pt-2 text-xs dark:border-zinc-800 md:col-span-4">
+                      <summary className="w-fit cursor-pointer select-none font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200">View details</summary>
+                      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+                        {details.record !== undefined ? <span className="max-w-full break-all text-xs leading-5 text-zinc-600 dark:text-zinc-400">{printable(details.record)}</span> : null}
+                        {details.password_reset === true ? <span className="rounded-md bg-zinc-100 px-2 py-1 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Password reset recorded</span> : null}
+                        {verification && typeof verification.comment === 'string' && verification.comment ? <span className="rounded-md bg-zinc-50 px-2 py-1 text-xs leading-5 text-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-300">{verification.comment}</span> : null}
+                        {changes.map(([key, value]) => {
+                          const change = value && typeof value === 'object' ? value as Record<string, unknown> : null;
+                          if (change && 'from' in change && 'to' in change) {
+                            return <span key={key} className="max-w-full rounded-md bg-zinc-50 px-2 py-1 text-[11px] leading-4 text-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-300"><span className="font-semibold">{fieldLabel(key)}:</span> {printable(change.from)} → {printable(change.to)}</span>;
+                          }
+                          return <span key={key} className="max-w-full rounded-md bg-zinc-50 px-2 py-1 text-[11px] leading-4 text-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-300"><span className="font-semibold">{fieldLabel(key)}:</span> {printable(value)}</span>;
+                        })}
+                      </div>
+                    </details>
+                  ) : null}
                 </li>
               );
             })}
           </ol>
         ) : (
-          <div className="p-10 text-center">
-            <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">—</div>
-            <h3 className="mt-3 text-sm font-bold text-zinc-800 dark:text-zinc-200">No activity recorded yet</h3>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Equipment changes and QR verifications will appear here.</p>
+          <div className="px-5 py-10 text-center">
+            <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" aria-hidden="true">
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" strokeWidth="2" strokeLinecap="round" /></svg>
+            </div>
+            <h3 className="mt-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200">{selectedDate ? 'No activity on this day' : 'No activity recorded yet'}</h3>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{selectedDate ? 'Choose another date to review its activity.' : 'Equipment changes and QR verifications will appear here.'}</p>
           </div>
         )}
       </div>
+      {!isLoading && hasMore ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => void loadMore()}
+            disabled={isLoadingMore}
+            className="min-h-10 rounded-xl border border-zinc-200 bg-white px-4 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 disabled:cursor-wait disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            {isLoadingMore ? 'Loading…' : 'Load more activity'}
+          </button>
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function ActorAvatar({ name, imageUrl }: { name: string; imageUrl?: string | null }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  return (
+    <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-zinc-200 bg-gradient-to-br from-green-50 to-blue-50 text-[11px] font-bold text-blue-800 dark:border-zinc-700 dark:from-green-950/50 dark:to-blue-950/50 dark:text-blue-200">
+      {imageUrl && !imageFailed ? (
+        <Image src={imageUrl} alt="" width={36} height={36} unoptimized loading="lazy" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} className="h-full w-full object-cover" />
+      ) : initialsFor(name)}
+    </span>
   );
 }

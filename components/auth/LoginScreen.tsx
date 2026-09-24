@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { createBrowserClient } from '@/lib/supabase/client';
 
 export interface LoginCredentials {
   emailOrUsername: string;
@@ -15,6 +16,10 @@ export interface LoginScreenProps {
   error?: string | null;
 }
 
+type LoginView = 'sign-in' | 'forgot-password';
+
+const inputClassName = 'min-h-11 w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 hover:border-zinc-400 focus:border-green-600 focus:ring-4 focus:ring-green-600/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus:border-green-500 dark:focus:ring-green-500/10';
+
 export function LoginScreen({
   onPasswordSignIn,
   onGoogleSignIn,
@@ -22,218 +27,248 @@ export function LoginScreen({
   loadingMethod,
   error,
 }: LoginScreenProps) {
+  const [view, setView] = useState<LoginView>('sign-in');
   const [showPassword, setShowPassword] = useState(false);
+  const [emailOrUsername, setEmailOrUsername] = useState('');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [isForgotSubmitting, setIsForgotSubmitting] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotNotice, setForgotNotice] = useState<string | null>(null);
+
   const activeLoadingMethod = loadingMethod ?? (isLoading ? 'password' : null);
   const isBusy = isLoading || activeLoadingMethod !== null;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
     const formData = new FormData(event.currentTarget);
-    const emailOrUsername = String(formData.get('emailOrUsername') ?? '').trim();
+    const identifier = String(formData.get('emailOrUsername') ?? '').trim();
     const password = String(formData.get('password') ?? '');
 
-    if (emailOrUsername && password) {
-      void onPasswordSignIn({ emailOrUsername, password });
+    if (identifier && password) {
+      void onPasswordSignIn({ emailOrUsername: identifier, password });
     }
   };
 
+  const handleForgotSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsForgotSubmitting(true);
+    setForgotError(null);
+    setForgotNotice(null);
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get('forgotEmail') ?? '').trim();
+
+    try {
+      const { error: resetError } = await createBrowserClient().auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      if (resetError) throw resetError;
+      setForgotNotice('If an account is registered with this email, password reset instructions will be sent.');
+    } catch {
+      setForgotError('Could not start password reset. Please try again.');
+    } finally {
+      setIsForgotSubmitting(false);
+    }
+  };
+
+  const openForgotPassword = () => {
+    const candidate = emailOrUsername.trim();
+    setForgotEmail(candidate.includes('@') ? candidate : '');
+    setForgotError(null);
+    setForgotNotice(null);
+    setView('forgot-password');
+  };
+
+  const returnToSignIn = () => {
+    setForgotError(null);
+    setForgotNotice(null);
+    setView('sign-in');
+  };
+
   return (
-    <main className="min-h-screen bg-zinc-100 px-3 py-3 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50 sm:px-4 sm:py-4">
-      <div className="mx-auto grid min-h-[calc(100vh-1.5rem)] max-w-5xl rounded-3xl border border-zinc-200/80 bg-white shadow-[0_24px_70px_-38px_rgba(24,24,27,0.38)] dark:border-zinc-800 dark:bg-zinc-900 sm:min-h-[calc(100vh-2rem)] lg:grid-cols-[1fr_0.9fr]">
-        <section className="relative hidden flex-col justify-between overflow-hidden rounded-l-3xl bg-gradient-to-br from-green-700 via-emerald-700 to-blue-700 p-7 text-white lg:flex xl:p-10">
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="absolute -right-32 -top-28 h-[27rem] w-[27rem] rounded-full border border-white/10" />
-            <div className="absolute -right-16 -top-12 h-[19rem] w-[19rem] rounded-full border border-white/10" />
-            <div className="absolute -bottom-40 -left-28 h-[32rem] w-[32rem] rounded-full border border-white/10" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.15),transparent_34%)]" />
+    <main className="flex min-h-screen items-center justify-center bg-zinc-100 px-4 py-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 sm:py-8">
+      <div className="w-full max-w-[25rem]">
+        <header className="mb-5 flex items-center justify-center gap-3 sm:mb-6">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-green-600 to-blue-600 text-white shadow-sm">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4.75 8.25 12 4l7.25 4.25v7.5L12 20l-7.25-4.25v-7.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+              <path d="m8.5 12.15 2.3 2.3 4.7-4.9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </div>
-
-          <div className="relative flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/25 bg-white/15 shadow-sm backdrop-blur-sm">
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M4.75 8.25 12 4l7.25 4.25v7.5L12 20l-7.25-4.25v-7.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-                <path d="m8.5 12.15 2.3 2.3 4.7-4.9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.19em] text-white/75">PENRO Batanes</p>
-              <p className="mt-0.5 text-sm font-semibold tracking-wide">ICT Inventory</p>
-            </div>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">PENRO Batanes</p>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">ICT Inventory</p>
           </div>
+        </header>
 
-          <div className="relative max-w-lg py-8">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white/90 backdrop-blur-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-200 shadow-[0_0_0_3px_rgba(167,243,208,0.18)]" />
-              Equipment stewardship, made clear
-            </div>
-            <h1 className="max-w-md text-4xl font-semibold leading-[1.12] tracking-tight xl:text-[3.25rem]">
-              Everything in its place.
-              <span className="mt-2 block text-white/75">Every record in view.</span>
-            </h1>
-            <p className="mt-4 max-w-md text-base leading-7 text-white/80">
-              A trusted workspace for the equipment records, verification, and day-to-day work of the office.
-            </p>
-
-            <div className="mt-6 flex max-w-sm items-center gap-4 rounded-2xl border border-white/20 bg-white/10 p-4 shadow-lg shadow-emerald-950/10 backdrop-blur-sm">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm">
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M4 7.5h16M6.5 4.5h11A2.5 2.5 0 0 1 20 7v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18V7a2.5 2.5 0 0 1 2.5-2.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-                  <path d="M8 11h8M8 14.5h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-semibold">One office inventory</p>
-                <p className="mt-1 text-xs leading-5 text-white/75">Clear records for equipment across PENRO Batanes.</p>
-              </div>
-            </div>
-          </div>
-
-          <p className="relative text-xs text-white/65">Provincial Environment and Natural Resources Office • Batanes</p>
-        </section>
-
-        <section className="flex items-center justify-center px-4 py-5 sm:px-8 sm:py-6 lg:px-9 xl:px-10">
-          <div className="w-full max-w-sm">
-            <div className="mb-5 flex items-center gap-3 lg:hidden">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-green-600 to-blue-600 text-white shadow-sm">
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M4.75 8.25 12 4l7.25 4.25v7.5L12 20l-7.25-4.25v-7.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-                  <path d="m8.5 12.15 2.3 2.3 4.7-4.9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">PENRO Batanes</p>
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">ICT Inventory</p>
-              </div>
-            </div>
-
-            <div className="mb-5">
-              <p className="mb-2 inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-800 dark:border-green-900/70 dark:bg-green-950/40 dark:text-green-300">
-                <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fillRule="evenodd" d="M10 1.7a.8.8 0 0 1 .45.14l5.3 3.54a.8.8 0 0 1 .36.67v4.2c0 3.72-2.31 6.35-5.75 8.02a.8.8 0 0 1-.7 0C6.22 16.6 3.9 13.97 3.9 10.25v-4.2a.8.8 0 0 1 .36-.67l5.3-3.54a.8.8 0 0 1 .44-.14Zm2.86 6.62a.8.8 0 1 0-1.22-1.04l-2.5 2.92-1.1-1.1a.8.8 0 0 0-1.13 1.13l1.72 1.71a.8.8 0 0 0 1.17-.04l3.06-3.58Z" clipRule="evenodd" />
-                </svg>
-                Authorized access
-              </p>
-              <h2 className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-2xl">Sign in to your account</h2>
-              <p className="mt-1.5 text-sm leading-5 text-zinc-600 dark:text-zinc-400">Enter your authorized account to continue to the inventory dashboard.</p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void onGoogleSignIn()}
-              disabled={isBusy}
-              aria-busy={activeLoadingMethod === 'google'}
-              className="group flex min-h-11 w-full items-center justify-center gap-3 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
-            >
-              {activeLoadingMethod === 'google' ? <LoadingSpinner /> : <GoogleMark />}
-              <span>{activeLoadingMethod === 'google' ? 'Connecting to Google…' : 'Continue with Google'}</span>
-            </button>
-
-            <div className="my-4 flex items-center gap-3" aria-hidden="true">
-              <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">or use your account</span>
-              <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div>
-                <label htmlFor="login-email" className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Email or username</label>
-                <input
-                  id="login-email"
-                  name="emailOrUsername"
-                  type="text"
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  required
-                  disabled={isBusy}
-                  placeholder="name@denr.gov.ph"
-                  className="min-h-11 w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 hover:border-zinc-400 focus:border-green-600 focus:ring-4 focus:ring-green-600/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus:border-green-500 dark:focus:ring-green-500/10"
-                />
-              </div>
-
-              <div>
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <label htmlFor="login-password" className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Password</label>
-                  <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Case-sensitive</span>
-                </div>
-                <div className="relative">
-                  <input
-                    id="login-password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    required
-                    disabled={isBusy}
-                    placeholder="Enter your password"
-                    className="min-h-11 w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-3.5 pr-20 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 hover:border-zinc-400 focus:border-green-600 focus:ring-4 focus:ring-green-600/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus:border-green-500 dark:focus:ring-green-500/10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((visible) => !visible)}
-                    disabled={isBusy}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    aria-pressed={showPassword}
-                    className="absolute inset-y-0 right-1 inline-flex min-h-11 min-w-[3.75rem] items-center justify-center gap-1 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600/50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                  >
-                    {showPassword ? (
-                      <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5.1 0 8.7 4.4 9.5 6-.3.6-1 1.5-2.1 2.5M6.2 6.2C3.9 7.6 2.7 9.6 2.5 11c.5 1.2 4.1 7 9.5 7 1.2 0 2.3-.3 3.3-.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    ) : (
-                      <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M2.5 12s3.2-7 9.5-7 9.5 7 9.5 7-3.2 7-9.5 7-9.5-7-9.5-7Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                        <circle cx="12" cy="12" r="2.8" stroke="currentColor" strokeWidth="1.8" />
-                      </svg>
-                    )}
-                    <span>{showPassword ? 'Hide' : 'Show'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {error ? (
-                <div role="alert" className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm leading-5 text-red-800 dark:border-red-900/70 dark:bg-red-950/35 dark:text-red-300">
-                  <svg className="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M10 1.67a8.33 8.33 0 1 0 0 16.66 8.33 8.33 0 0 0 0-16.66ZM8.6 6.5a.9.9 0 0 1 1.8 0v3.36a.9.9 0 1 1-1.8 0V6.5Zm.9 7.12a1.02 1.02 0 1 0 0-2.04 1.02 1.02 0 0 0 0 2.04Z" clipRule="evenodd" />
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_18px_50px_-32px_rgba(24,24,27,0.35)] dark:border-zinc-800 dark:bg-zinc-900 sm:p-7">
+          {view === 'sign-in' ? (
+            <>
+              <div className="mb-5">
+                <p className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-green-800 dark:border-green-900/70 dark:bg-green-950/40 dark:text-green-300">
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fillRule="evenodd" d="M10 1.7a.8.8 0 0 1 .45.14l5.3 3.54a.8.8 0 0 1 .36.67v4.2c0 3.72-2.31 6.35-5.75 8.02a.8.8 0 0 1-.7 0C6.22 16.6 3.9 13.97 3.9 10.25v-4.2a.8.8 0 0 1 .36-.67l5.3-3.54a.8.8 0 0 1 .44-.14Zm2.86 6.62a.8.8 0 1 0-1.22-1.04l-2.5 2.92-1.1-1.1a.8.8 0 0 0-1.13 1.13l1.72 1.71a.8.8 0 0 0 1.17-.04l3.06-3.58Z" clipRule="evenodd" />
                   </svg>
-                  <span>{error}</span>
-                </div>
-              ) : null}
+                  Authorized access
+                </p>
+                <h1 className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-2xl">Sign in to your account</h1>
+                <p className="mt-1.5 text-sm leading-5 text-zinc-600 dark:text-zinc-400">Use your authorized account to continue to the inventory dashboard.</p>
+              </div>
 
               <button
-                type="submit"
+                type="button"
+                onClick={() => void onGoogleSignIn()}
                 disabled={isBusy}
-                aria-busy={activeLoadingMethod === 'password'}
-                className="group flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-900/10 transition hover:from-green-700 hover:to-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/25 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-65"
+                aria-busy={activeLoadingMethod === 'google'}
+                className="flex min-h-11 w-full items-center justify-center gap-3 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
               >
-                {activeLoadingMethod === 'password' ? (
-                  <>
-                    <LoadingSpinner />
-                    <span>Signing in…</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Sign in</span>
-                    <svg className="h-4 w-4 transition-transform group-hover:translate-x-0.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M3.75 10a.75.75 0 0 1 .75-.75h9.69L11.47 6.53a.75.75 0 0 1 1.06-1.06l4 4a.75.75 0 0 1 0 1.06l-4 4a.75.75 0 1 1-1.06-1.06l2.72-2.72H4.5a.75.75 0 0 1-.75-.75Z" clipRule="evenodd" />
-                    </svg>
-                  </>
-                )}
+                {activeLoadingMethod === 'google' ? <LoadingSpinner /> : <GoogleMark />}
+                <span>{activeLoadingMethod === 'google' ? 'Connecting to Google…' : 'Continue with Google'}</span>
               </button>
-            </form>
 
-            <div className="mt-4 flex items-start gap-2.5 border-t border-zinc-200 pt-4 text-xs leading-5 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-              <svg className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M5.83 7.5V5.83a4.17 4.17 0 0 1 8.34 0V7.5a2.5 2.5 0 0 1 2.5 2.5v5a2.5 2.5 0 0 1-2.5 2.5H5.83a2.5 2.5 0 0 1-2.5-2.5v-5a2.5 2.5 0 0 1 2.5-2.5Zm1.67 0h5V5.83a2.5 2.5 0 0 0-5 0V7.5Z" clipRule="evenodd" />
-              </svg>
-              <p>This workspace is limited to authorized PENRO Batanes inventory administrators. Contact your system administrator if you need access.</p>
-            </div>
-          </div>
+              <div className="my-4 flex items-center gap-3" aria-hidden="true">
+                <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">or use your account</span>
+                <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-700" />
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-3.5">
+                <div>
+                  <label htmlFor="login-email" className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Email or username</label>
+                  <input
+                    id="login-email"
+                    name="emailOrUsername"
+                    type="text"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    required
+                    disabled={isBusy}
+                    value={emailOrUsername}
+                    onChange={(event) => setEmailOrUsername(event.target.value)}
+                    placeholder="name@denr.gov.ph"
+                    className={inputClassName}
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <label htmlFor="login-password" className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Password</label>
+                    <button type="button" onClick={openForgotPassword} disabled={isBusy} className="rounded px-1 py-0.5 text-xs font-semibold text-blue-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300 dark:hover:text-blue-200">Forgot password?</button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="login-password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      disabled={isBusy}
+                      placeholder="Enter your password"
+                      className={`${inputClassName} pr-20`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      disabled={isBusy}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                      className="absolute inset-y-0 right-1 inline-flex min-h-11 min-w-[3.75rem] items-center justify-center gap-1 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600/50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                    >
+                      {showPassword ? (
+                        <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5.1 0 8.7 4.4 9.5 6-.3.6-1 1.5-2.1 2.5M6.2 6.2C3.9 7.6 2.7 9.6 2.5 11c.5 1.2 4.1 7 9.5 7 1.2 0 2.3-.3 3.3-.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : (
+                        <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M2.5 12s3.2-7 9.5-7 9.5 7 9.5 7-3.2 7-9.5 7-9.5-7-9.5-7Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                          <circle cx="12" cy="12" r="2.8" stroke="currentColor" strokeWidth="1.8" />
+                        </svg>
+                      )}
+                      <span>{showPassword ? 'Hide' : 'Show'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {error ? <AuthMessage kind="error">{error}</AuthMessage> : null}
+
+                <button
+                  type="submit"
+                  disabled={isBusy}
+                  aria-busy={activeLoadingMethod === 'password'}
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-green-700 hover:to-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/25 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-65"
+                >
+                  {activeLoadingMethod === 'password' ? <LoadingSpinner /> : null}
+                  <span>{activeLoadingMethod === 'password' ? 'Signing in…' : 'Sign in'}</span>
+                </button>
+              </form>
+
+              <p className="mt-5 border-t border-zinc-200 pt-4 text-xs leading-5 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                This workspace is limited to authorized PENRO Batanes inventory administrators.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mb-5">
+                <button type="button" onClick={returnToSignIn} disabled={isForgotSubmitting} className="mb-4 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1 text-xs font-semibold text-zinc-600 transition hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-300 dark:hover:text-zinc-100">
+                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M16.25 10a.75.75 0 0 1-.75.75H6.06l2.72 2.72a.75.75 0 1 1-1.06 1.06l-4-4a.75.75 0 0 1 0-1.06l4-4a.75.75 0 1 1 1.06 1.06l-2.72 2.72h9.44a.75.75 0 0 1 .75.75Z" clipRule="evenodd" /></svg>
+                  Back to sign in
+                </button>
+                <h1 className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-2xl">Reset your password</h1>
+                <p className="mt-1.5 text-sm leading-5 text-zinc-600 dark:text-zinc-400">Enter your account email and we’ll send reset instructions if it is eligible.</p>
+              </div>
+
+              <form onSubmit={handleForgotSubmit} className="space-y-3.5">
+                <div>
+                  <label htmlFor="forgot-email" className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Email address</label>
+                  <input
+                    id="forgot-email"
+                    name="forgotEmail"
+                    type="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    required
+                    disabled={isForgotSubmitting}
+                    value={forgotEmail}
+                    onChange={(event) => setForgotEmail(event.target.value)}
+                    placeholder="name@denr.gov.ph"
+                    className={inputClassName}
+                  />
+                </div>
+                {forgotError ? <AuthMessage kind="error">{forgotError}</AuthMessage> : null}
+                {forgotNotice ? <AuthMessage kind="success">{forgotNotice}</AuthMessage> : null}
+                <button
+                  type="submit"
+                  disabled={isForgotSubmitting}
+                  aria-busy={isForgotSubmitting}
+                  className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-green-700 hover:to-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:opacity-65"
+                >
+                  {isForgotSubmitting ? <LoadingSpinner /> : null}
+                  <span>{isForgotSubmitting ? 'Sending instructions…' : 'Send reset instructions'}</span>
+                </button>
+              </form>
+
+              <p className="mt-5 border-t border-zinc-200 pt-4 text-xs leading-5 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                For account security, the response won’t confirm whether an email is registered.
+              </p>
+            </>
+          )}
         </section>
+
+        <p className="mt-4 text-center text-[11px] text-zinc-400 dark:text-zinc-500">Provincial Environment and Natural Resources Office · Batanes</p>
       </div>
     </main>
   );
+}
+
+function AuthMessage({ children, kind }: { children: string; kind: 'error' | 'success' }) {
+  const styles = kind === 'error'
+    ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/70 dark:bg-red-950/35 dark:text-red-300'
+    : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/35 dark:text-emerald-300';
+
+  return <div role={kind === 'error' ? 'alert' : 'status'} className={`rounded-xl border px-3 py-2.5 text-sm leading-5 ${styles}`}>{children}</div>;
 }
 
 function GoogleMark() {

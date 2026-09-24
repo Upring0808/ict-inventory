@@ -10,6 +10,7 @@ interface AuthorizedAccount {
   username: string | null;
   name: string;
   createdAt: string;
+  isCurrentUser: boolean;
 }
 
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,32}$/i;
@@ -17,7 +18,7 @@ const labelClassName = 'block text-xs font-semibold leading-5 text-zinc-700 dark
 const inputClassName = 'mt-1.5 block min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm font-normal text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 hover:border-zinc-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus:border-blue-400';
 
 export function AccountSettings() {
-  const { profile, signOut } = useAuth();
+  const { signOut } = useAuth();
   const [accounts, setAccounts] = useState<AuthorizedAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -102,7 +103,7 @@ export function AccountSettings() {
       });
       if (!response.ok) throw new Error(await readApiError(response, 'The account could not be updated.'));
       const updateResult = await response.json().catch(() => null) as { reauthenticate?: boolean; warning?: string } | null;
-      const isCurrentUser = account.email.toLowerCase() === profile?.email.toLowerCase();
+      const isCurrentUser = account.isCurrentUser;
       if (updateResult?.warning) {
         form.reset();
         await loadAccounts();
@@ -189,7 +190,7 @@ export function AccountSettings() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Current accounts</h3>
-              <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Edit account details and credentials.</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Edit your credentials. Other authorized accounts are view-only.</p>
             </div>
             <button type="button" onClick={() => void loadAccounts()} disabled={isLoading} className="min-h-10 shrink-0 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800">Refresh</button>
           </div>
@@ -199,26 +200,38 @@ export function AccountSettings() {
           ) : accounts.length ? (
             <div className="space-y-3">
               {accounts.map((account) => {
-                const isCurrentUser = account.email.toLowerCase() === profile?.email.toLowerCase();
+                const isCurrentUser = account.isCurrentUser;
                 return (
-                  <form key={`${account.id}:${account.name}:${account.email}:${account.username || ''}`} onSubmit={(event) => void handleUpdate(event, account)} className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/50 sm:p-5">
+                  <div key={`${account.id}:${account.name}:${account.email}:${account.username || ''}`} className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/50 sm:p-5">
                     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">{account.name}{isCurrentUser && <span className="ml-2 inline-flex rounded-full border border-green-200 bg-green-50 px-2 py-0.5 align-middle text-[10px] font-bold text-green-800 dark:border-green-900/60 dark:bg-green-950/50 dark:text-green-300">You</span>}</p>
                         <p className="mt-1 break-all text-xs text-zinc-500 dark:text-zinc-400">{account.email}</p>
                       </div>
-                      <button type="button" onClick={() => void handleDelete(account)} disabled={busyId === account.id || accounts.length <= 1} title={accounts.length <= 1 ? 'At least one authorized account must remain.' : 'Remove account'} className="min-h-10 shrink-0 rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-500/15 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/30">Remove</button>
+                      {isCurrentUser && (
+                        <button type="button" onClick={() => void handleDelete(account)} disabled={busyId === account.id || accounts.length <= 1} title={accounts.length <= 1 ? 'At least one authorized account must remain.' : 'Remove your account'} className="min-h-10 shrink-0 rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-500/15 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/30">Remove</button>
+                      )}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className={labelClassName}>Name<input name="name" defaultValue={account.name} required minLength={2} maxLength={100} className={inputClassName} /></label>
-                      <label className={labelClassName}>Email address<input name="email" type="email" autoComplete="email" defaultValue={account.email} required className={inputClassName} /></label>
-                      <label className={labelClassName}>Username <span className="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span><input name="username" autoComplete="username" defaultValue={account.username || ''} minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" className={inputClassName} /></label>
-                      <label className={`${labelClassName} sm:col-span-2`}>New password <span className="font-normal text-zinc-500 dark:text-zinc-400">(leave blank to keep current)</span><input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} className={inputClassName} /></label>
-                    </div>
-                    <div className="mt-3 flex justify-end">
-                      <button type="submit" disabled={busyId === account.id} className="min-h-11 rounded-xl bg-zinc-900 px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">{busyId === account.id ? 'Saving…' : 'Save changes'}</button>
-                    </div>
-                  </form>
+                    {isCurrentUser ? (
+                      <form onSubmit={(event) => void handleUpdate(event, account)}>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className={labelClassName}>Name<input name="name" defaultValue={account.name} required minLength={2} maxLength={100} className={inputClassName} /></label>
+                          <label className={labelClassName}>Email address<input name="email" type="email" autoComplete="email" defaultValue={account.email} required className={inputClassName} /></label>
+                          <label className={labelClassName}>Username <span className="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span><input name="username" autoComplete="username" defaultValue={account.username || ''} minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" className={inputClassName} /></label>
+                          <label className={`${labelClassName} sm:col-span-2`}>New password <span className="font-normal text-zinc-500 dark:text-zinc-400">(leave blank to keep current)</span><input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} className={inputClassName} /></label>
+                        </div>
+                        <div className="mt-3 flex justify-end">
+                          <button type="submit" disabled={busyId === account.id} className="min-h-11 rounded-xl bg-zinc-900 px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">{busyId === account.id ? 'Saving…' : 'Save my changes'}</button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="grid gap-3 rounded-xl border border-zinc-200 bg-white/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/60 sm:grid-cols-3">
+                        <p className="min-w-0 text-xs text-zinc-600 dark:text-zinc-400"><span className="block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Name</span><span className="mt-1 block truncate font-medium text-zinc-800 dark:text-zinc-200">{account.name}</span></p>
+                        <p className="min-w-0 text-xs text-zinc-600 dark:text-zinc-400"><span className="block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Email</span><span className="mt-1 block truncate font-medium text-zinc-800 dark:text-zinc-200">{account.email}</span></p>
+                        <p className="min-w-0 text-xs text-zinc-600 dark:text-zinc-400"><span className="block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Username</span><span className="mt-1 block truncate font-medium text-zinc-800 dark:text-zinc-200">{account.username || 'Not set'}</span></p>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>

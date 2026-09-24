@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { createBrowserClient } from '@/lib/supabase/client';
 import type { Session } from '@supabase/supabase-js';
+import { fetchAuthProfile } from '@/lib/auth/client';
 
 const LOGIN_ERROR_KEY = 'ict_inventory_login_error';
 const callbackSessions = new Map<string, Promise<Session>>();
@@ -31,10 +32,7 @@ export function AuthCallback({ code, providerError }: { code: string | null; pro
 
         const session = await exchangeCallbackCodeOnce(code);
 
-        const response = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          cache: 'no-store',
-        });
+        const response = await fetchAuthProfile(session.access_token);
         if (!response.ok) {
           if (response.status !== 401 && response.status !== 403) throw new Error('Could not check this account right now. Check your connection and try again.');
           throw new Error('This Google account is not registered as an authorized inventory user.');

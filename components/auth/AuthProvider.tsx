@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { fetchAuthProfile } from '@/lib/auth/client';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 export interface AuthProfile {
@@ -28,7 +29,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const LOGIN_ERROR_KEY = 'ict_inventory_login_error';
 
-type SessionValidation = 'authorized' | 'rejected' | 'unavailable';
+type SessionValidation = 'authorized' | 'rejected' | 'unavailable' | 'superseded';
 
 async function responseError(response: Response, fallback: string): Promise<string> {
   try {
@@ -41,6 +42,8 @@ async function responseError(response: Response, fallback: string): Promise<stri
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clientRef = useRef<ReturnType<typeof createBrowserClient> | null>(null);
+  const authRevisionRef = useRef(0);
+  const signInAttemptRef = useRef(0);
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [loadingMethod, setLoadingMethod] = useState<AuthLoadingMethod>(null);
@@ -55,7 +58,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoadingMethod((current) => current === 'google' ? null : current);
   }, []);
 
-  const setSignedOutState = useCallback(async (configurationError?: string) => {
+  const setSignedOutState = useCallback(async (configurationError?: string, expectedRevision?: number) => {
+    const isCurrentRevision = () => expectedRevision === undefined || expectedRevision === authRevisionRef.current;
+    if (!isCurrentRevision()) return;
+
     setProfile(null);
     if (typeof window !== 'undefined') {
       const pendingError = window.sessionStorage.getItem(LOGIN_ERROR_KEY);
@@ -66,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (configurationError) {
+      if (!isCurrentRevision()) return;
       setError(configurationError);
       setStatus('unavailable');
       return;
@@ -73,27 +80,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const response = await fetch('/api/auth/status', { cache: 'no-store' });
+      if (!isCurrentRevision()) return;
       if (!response.ok) {
-        setError(await responseError(response, 'Authentication is not configured.'));
+        const message = await responseError(response, 'Authentication is not configured.');
+        if (!isCurrentRevision()) return;
+        setError(message);
         setStatus('unavailable');
         return;
       }
       const result = await response.json() as { setupRequired?: boolean };
+      if (!isCurrentRevision()) return;
       setStatus(result.setupRequired ? 'setup_required' : 'unauthenticated');
     } catch {
+      if (!isCurrentRevision()) return;
       setError('Could not connect to the authentication service. Check your connection and try again.');
       setStatus('unavailable');
     }
   }, []);
 
-  const validateSession = useCallback(async (session: Session) => {
+  const validateSession = useCallback(async (session: Session, expectedRevision = authRevisionRef.current) => {
+    const isCurrentRevision = () => expectedRevision === authRevisionRef.current;
     try {
-      const response = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        cache: 'no-store',
-      });
+      const response = await fetchAuthProfile(session.access_token);
+      if (!isCurrentRevision()) return 'superseded' satisfies SessionValidation;
       if (!response.ok) {
         const message = await responseError(response, 'This Google account is not on the authorized account list.');
+        if (!isCurrentRevision()) return 'superseded' satisfies SessionValidation;
         if (response.status !== 401 && response.status !== 403) {
           setProfile(null);
           setStatus('unauthenticated');
@@ -103,17 +115,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (typeof window !== 'undefined') window.sessionStorage.setItem(LOGIN_ERROR_KEY, message);
         setProfile(null);
         setStatus('unauthenticated');
-        await clientRef.current?.auth.signOut();
         setError(message);
+        await clientRef.current?.auth.signOut();
         return 'rejected' satisfies SessionValidation;
       }
 
       const nextProfile = await response.json() as AuthProfile;
+      if (!isCurrentRevision()) return 'superseded' satisfies SessionValidation;
       setProfile(nextProfile);
       setError(null);
       setStatus('authenticated');
       return 'authorized' satisfies SessionValidation;
     } catch {
+      if (!isCurrentRevision()) return 'superseded' satisfies SessionValidation;
       setProfile(null);
       setStatus('unauthenticated');
       setError('Could not validate your account right now. Check your connection and try again.');
@@ -134,29 +148,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clientRef.current = client;
       const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
         if (!active) return;
+        if (event === 'INITIAL_SESSION') return;
+        const eventRevision = ++authRevisionRef.current;
         if (event === 'SIGNED_OUT' || !session) {
           clearGoogleLoading();
           window.setTimeout(() => {
-            if (active) void setSignedOutState();
+            if (active) void setSignedOutState(undefined, eventRevision);
           }, 0);
-        } else if (event !== 'INITIAL_SESSION' && event !== 'SIGNED_IN') {
+        } else if (event !== 'SIGNED_IN') {
           // Password sign-in validates explicitly after setSession. OAuth
           // validates on its callback page and again on the root page load.
           // Skipping SIGNED_IN here prevents duplicate, racing checks.
           window.setTimeout(() => {
-            if (active) void validateSession(session);
+            if (active) void validateSession(session, eventRevision);
           }, 0);
         }
       });
 
+      const initialRevision = authRevisionRef.current;
       void client.auth.getSession().then(({ data, error: sessionError }) => {
-        if (!active) return;
+        if (!active || initialRevision !== authRevisionRef.current) return;
         if (sessionError) {
-          void setSignedOutState('Your sign-in session could not be read. Sign in again.');
+          void setSignedOutState('Your sign-in session could not be read. Sign in again.', initialRevision);
         } else if (data.session) {
-          void validateSession(data.session);
+          void validateSession(data.session, initialRevision);
         } else {
-          void setSignedOutState();
+          void setSignedOutState(undefined, initialRevision);
         }
       });
 
@@ -167,7 +184,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     } catch (clientError) {
       const message = clientError instanceof Error ? clientError.message : 'Supabase is not configured.';
-      window.setTimeout(() => { void setSignedOutState(message); }, 0);
+      const failedClientRevision = authRevisionRef.current;
+      window.setTimeout(() => { void setSignedOutState(message, failedClientRevision); }, 0);
       return () => {
         active = false;
         window.removeEventListener('pageshow', handlePageShow);
@@ -176,6 +194,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearGoogleLoading, setSignedOutState, validateSession]);
 
   const signInWithPassword = useCallback(async (emailOrUsername: string, password: string) => {
+    const attempt = ++signInAttemptRef.current;
+    ++authRevisionRef.current;
     setError(null);
     setLoadingMethod('password');
     try {
@@ -191,17 +211,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clientRef.current = client;
       const { data, error: sessionError } = await client.auth.setSession(tokens);
       if (sessionError || !data.session) throw new Error('Sign-in could not be completed. Try again.');
-      const validation = await validateSession(data.session);
+      const validation = await validateSession(data.session, authRevisionRef.current);
       if (validation === 'rejected') throw new Error('This account is not authorized to use the dashboard.');
       if (validation === 'unavailable') throw new Error('Your credentials were accepted, but access could not be checked right now. Please try signing in again.');
     } catch (signInError) {
-      setError(signInError instanceof Error ? signInError.message : 'Sign-in failed. Try again.');
+      if (attempt === signInAttemptRef.current) {
+        setError(signInError instanceof Error ? signInError.message : 'Sign-in failed. Try again.');
+      }
     } finally {
-      setLoadingMethod((current) => current === 'password' ? null : current);
+      if (attempt === signInAttemptRef.current) {
+        setLoadingMethod((current) => current === 'password' ? null : current);
+      }
     }
   }, [validateSession]);
 
   const signInWithGoogle = useCallback(async () => {
+    ++signInAttemptRef.current;
+    ++authRevisionRef.current;
     setError(null);
     clearGoogleLoading();
     setLoadingMethod('google');
@@ -226,6 +252,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearGoogleLoading]);
 
   const signOut = useCallback(async () => {
+    ++signInAttemptRef.current;
+    ++authRevisionRef.current;
     setError(null);
     clearGoogleLoading();
     try {

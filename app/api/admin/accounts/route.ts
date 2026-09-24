@@ -42,6 +42,7 @@ export async function GET(request: Request) {
           username: account.username,
           name: account.full_name,
           createdAt: account.created_at,
+          isCurrentUser: account.id === actor.accountId,
         })),
         limit: MAX_ACCOUNTS,
       },
@@ -152,6 +153,9 @@ export async function PATCH(request: Request) {
       (username && !USERNAME_PATTERN.test(username)) ||
       (password && !validPassword(password))) {
       return Response.json({ error: 'Enter a valid name, email, and username. A new password must be at least 12 characters.' }, { status: 400 });
+    }
+    if (id !== actor.accountId) {
+      return Response.json({ error: 'You can only update your own account.' }, { status: 403 });
     }
 
     const admin = createAdminClient();
@@ -302,6 +306,9 @@ export async function DELETE(request: Request) {
       .maybeSingle();
     if (findError) return Response.json({ error: 'Could not load the account to remove.' }, { status: 503 });
     if (!account) return Response.json({ error: 'Authorized account not found.' }, { status: 404 });
+    if (id !== actor.accountId) {
+      return Response.json({ error: 'You can only remove your own account.' }, { status: 403 });
+    }
 
     const { error } = await admin.rpc('manage_authorized_account', {
       p_operation: 'delete',
