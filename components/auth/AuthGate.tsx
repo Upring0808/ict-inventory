@@ -40,6 +40,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">!</div>
           <h1 className="mt-5 text-xl font-bold text-zinc-900 dark:text-zinc-50">Authentication is unavailable</h1>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{auth.error || 'Check the Supabase server settings and apply the inventory schema.'}</p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <button type="button" onClick={() => void auth.retryAuthorization()} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15">Try again</button>
+            <button type="button" onClick={() => window.location.reload()} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800">Reload page</button>
+          </div>
         </section>
       </main>
     );

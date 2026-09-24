@@ -152,10 +152,7 @@ export function LoginScreen({
                 </div>
 
                 <div>
-                  <div className="mb-1 flex items-center justify-between gap-3">
-                    <label htmlFor="login-password" className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Password</label>
-                    <button type="button" onClick={openForgotPassword} disabled={isBusy} className="rounded px-1 py-0.5 text-xs font-semibold text-blue-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300 dark:hover:text-blue-200">Forgot password?</button>
-                  </div>
+                  <label htmlFor="login-password" className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Password</label>
                   <div className="relative">
                     <input
                       id="login-password"
@@ -188,6 +185,9 @@ export function LoginScreen({
                       )}
                       <span>{showPassword ? 'Hide' : 'Show'}</span>
                     </button>
+                  </div>
+                  <div className="mt-1.5 flex justify-end">
+                    <button type="button" onClick={openForgotPassword} disabled={isBusy} className="rounded px-1 py-0.5 text-xs font-semibold text-blue-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300 dark:hover:text-blue-200">Forgot password?</button>
                   </div>
                 </div>
 

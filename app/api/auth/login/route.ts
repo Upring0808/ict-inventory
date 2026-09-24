@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     const { data: accounts, error: accountError } = await admin
       .from('authorized_accounts')
-      .select('id,email,username,auth_user_id')
+      .select('id,email,username,full_name,auth_user_id')
       .limit(2);
 
     if (accountError) {
@@ -41,6 +41,9 @@ export async function POST(request: Request) {
       password,
     });
 
+    if (error && error.status !== 400 && error.status !== 401 && error.status !== 403) {
+      return Response.json({ error: 'Sign-in is temporarily unavailable. Please try again.' }, { status: 503 });
+    }
     if (error || !data.session || !data.user?.email || normalizeEmail(data.user.email) !== normalizeEmail(account.email)) {
       return Response.json({ error: 'Invalid email/username or password.' }, { status: 401 });
     }
@@ -60,10 +63,21 @@ export async function POST(request: Request) {
       }
     }
 
+    const metadata = data.user.user_metadata as Record<string, unknown> | null;
+    const avatarUrl = typeof metadata?.avatar_url === 'string'
+      ? metadata.avatar_url
+      : typeof metadata?.picture === 'string' ? metadata.picture : null;
+
     return Response.json(
       {
         access_token: data.session.access_token,
         refresh_token: data.session.refresh_token,
+        profile: {
+          id: data.user.id,
+          email: normalizeEmail(data.user.email),
+          name: account.full_name,
+          avatarUrl,
+        },
       },
       { headers: { 'Cache-Control': 'no-store' } }
     );

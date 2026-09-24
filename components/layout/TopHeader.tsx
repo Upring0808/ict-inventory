@@ -32,6 +32,8 @@ export function TopHeader({
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const avatarFailed = Boolean(profile?.avatarUrl && failedAvatarUrl === profile.avatarUrl);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const profileTriggerRef = useRef<HTMLButtonElement>(null);
   const themeTransitionTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -44,6 +46,29 @@ export function TopHeader({
   useEffect(() => () => {
     if (themeTransitionTimer.current) window.clearTimeout(themeTransitionTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (!isProfileOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !profileMenuRef.current?.contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsProfileOpen(false);
+        profileTriggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isProfileOpen]);
 
   const toggleTheme = () => {
     const nextDark = !isDark;
@@ -224,12 +249,14 @@ export function TopHeader({
           </button>
 
           {/* Authenticated account profile */}
-          <div className="relative border-l border-zinc-200 pl-2 dark:border-zinc-800 sm:pl-3">
+          <div ref={profileMenuRef} className="relative border-l border-zinc-200 pl-2 dark:border-zinc-800 sm:pl-3">
             <button
+              ref={profileTriggerRef}
               type="button"
               onClick={() => setIsProfileOpen((open) => !open)}
               aria-expanded={isProfileOpen}
-              aria-label="Open user profile menu"
+              aria-controls={isProfileOpen ? 'profile-menu' : undefined}
+              aria-label={isProfileOpen ? 'Close user profile menu' : 'Open user profile menu'}
               className="flex max-w-[11rem] items-center gap-2 rounded-xl px-1 py-1 text-left transition hover:bg-zinc-100 dark:hover:bg-zinc-800 sm:max-w-[14rem]"
             >
               {profile?.avatarUrl && !avatarFailed ? (
@@ -253,19 +280,31 @@ export function TopHeader({
               <svg className="hidden h-3.5 w-3.5 shrink-0 text-zinc-400 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m7 10 5 5 5-5" /></svg>
             </button>
             {isProfileOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-zinc-200 bg-white p-2 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-                <div className="border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
-                  <p className="truncate text-xs font-bold text-zinc-900 dark:text-zinc-100">{profile?.name}</p>
-                  <p className="mt-0.5 break-all text-[10px] text-zinc-500 dark:text-zinc-400">{profile?.email}</p>
+              <div id="profile-menu" className="absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-zinc-900/10 ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/30 dark:ring-white/5">
+                <div className="flex items-center gap-3 border-b border-zinc-100 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/50">
+                  {profile?.avatarUrl && !avatarFailed ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={profile.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-zinc-200 dark:ring-zinc-700" />
+                  ) : (
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-green-600 to-blue-600 text-sm font-bold text-white">
+                      {(profile?.name || profile?.email || 'U').trim().slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{profile?.name || 'Authorized user'}</p>
+                    <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">{profile?.email}</p>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => { setIsProfileOpen(false); void signOut(); }}
-                  className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-3H9m0 0 3-3m-3 3 3 3" /></svg>
-                  Sign out
-                </button>
+                <div className="p-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsProfileOpen(false); void signOut(); }}
+                    className="flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 text-left text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-3H9m0 0 3-3m-3 3 3 3" /></svg>
+                    Sign out
+                  </button>
+                </div>
               </div>
             )}
           </div>

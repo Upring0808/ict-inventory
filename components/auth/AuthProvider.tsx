@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { fetchAuthProfile } from '@/lib/auth/client';
+import { fetchAuthProfile, fetchWithTimeout, withDeadline } from '@/lib/auth/client';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 export interface AuthProfile {
@@ -23,13 +23,14 @@ interface AuthContextValue {
   signInWithPassword: (emailOrUsername: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  retryAuthorization: () => Promise<void>;
   clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const LOGIN_ERROR_KEY = 'ict_inventory_login_error';
-
-type SessionValidation = 'authorized' | 'rejected' | 'unavailable' | 'superseded';
+const VERIFICATION_ERROR = 'Your account could not be checked right now. Please try again.';
+type PendingPasswordSession = { accessToken: string; profile: AuthProfile };
 
 async function responseError(response: Response, fallback: string): Promise<string> {
   try {
@@ -40,15 +41,29 @@ async function responseError(response: Response, fallback: string): Promise<stri
   }
 }
 
+function takeLoginError(): string | null {
+  const message = window.sessionStorage.getItem(LOGIN_ERROR_KEY);
+  if (message) window.sessionStorage.removeItem(LOGIN_ERROR_KEY);
+  return message;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clientRef = useRef<ReturnType<typeof createBrowserClient> | null>(null);
-  const authRevisionRef = useRef(0);
+  const operationRef = useRef(0);
   const signInAttemptRef = useRef(0);
+  const tokenRef = useRef<string | null>(null);
+  const pendingPasswordRef = useRef<PendingPasswordSession | null>(null);
+  const statusRef = useRef<AuthStatus>('loading');
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [loadingMethod, setLoadingMethod] = useState<AuthLoadingMethod>(null);
   const [error, setError] = useState<string | null>(null);
   const googleLoadingTimerRef = useRef<number | null>(null);
+
+  const changeStatus = useCallback((next: AuthStatus) => {
+    statusRef.current = next;
+    setStatus(next);
+  }, []);
 
   const clearGoogleLoading = useCallback(() => {
     if (googleLoadingTimerRef.current !== null) {
@@ -58,192 +73,258 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoadingMethod((current) => current === 'google' ? null : current);
   }, []);
 
-  const setSignedOutState = useCallback(async (configurationError?: string, expectedRevision?: number) => {
-    const isCurrentRevision = () => expectedRevision === undefined || expectedRevision === authRevisionRef.current;
-    if (!isCurrentRevision()) return;
-
+  const showUnavailable = useCallback((message: string, operation: number) => {
+    if (operation !== operationRef.current) return;
     setProfile(null);
-    if (typeof window !== 'undefined') {
-      const pendingError = window.sessionStorage.getItem(LOGIN_ERROR_KEY);
-      if (pendingError) {
-        setError(pendingError);
-        window.sessionStorage.removeItem(LOGIN_ERROR_KEY);
-      }
-    }
+    setError(message);
+    changeStatus('unavailable');
+  }, [changeStatus]);
 
-    if (configurationError) {
-      if (!isCurrentRevision()) return;
-      setError(configurationError);
-      setStatus('unavailable');
+  const acceptSession = useCallback((session: Session, nextProfile: AuthProfile) => {
+    ++operationRef.current;
+    tokenRef.current = session.access_token;
+    pendingPasswordRef.current = null;
+    setProfile(nextProfile);
+    setError(null);
+    setLoadingMethod(null);
+    changeStatus('authenticated');
+  }, [changeStatus]);
+
+  const resolveNoSession = useCallback(async (checkSetup: boolean) => {
+    const operation = ++operationRef.current;
+    tokenRef.current = null;
+    pendingPasswordRef.current = null;
+    setProfile(null);
+    clearGoogleLoading();
+    setError(takeLoginError());
+    if (!checkSetup) {
+      changeStatus('unauthenticated');
       return;
     }
 
+    changeStatus('loading');
     try {
-      const response = await fetch('/api/auth/status', { cache: 'no-store' });
-      if (!isCurrentRevision()) return;
+      const response = await fetchWithTimeout('/api/auth/status', { cache: 'no-store' }, 8_000);
+      if (operation !== operationRef.current) return;
       if (!response.ok) {
-        const message = await responseError(response, 'Authentication is not configured.');
-        if (!isCurrentRevision()) return;
-        setError(message);
-        setStatus('unavailable');
+        showUnavailable(await responseError(response, 'Authentication is temporarily unavailable.'), operation);
         return;
       }
       const result = await response.json() as { setupRequired?: boolean };
-      if (!isCurrentRevision()) return;
-      setStatus(result.setupRequired ? 'setup_required' : 'unauthenticated');
+      if (operation === operationRef.current) changeStatus(result.setupRequired ? 'setup_required' : 'unauthenticated');
     } catch {
-      if (!isCurrentRevision()) return;
-      setError('Could not connect to the authentication service. Check your connection and try again.');
-      setStatus('unavailable');
+      showUnavailable('Could not connect to the authentication service. Check your connection and try again.', operation);
     }
-  }, []);
+  }, [changeStatus, clearGoogleLoading, showUnavailable]);
 
-  const validateSession = useCallback(async (session: Session, expectedRevision = authRevisionRef.current) => {
-    const isCurrentRevision = () => expectedRevision === authRevisionRef.current;
+  const verifySession = useCallback(async (session: Session, force = false) => {
+    const pending = pendingPasswordRef.current;
+    if (pending?.accessToken === session.access_token && pending.profile.id === session.user.id) {
+      acceptSession(session, pending.profile);
+      return;
+    }
+    // SIGNED_IN also fires on tab focus. Repeated events for the same token
+    // must not cancel an in-flight account check.
+    if (!force && tokenRef.current === session.access_token &&
+      (statusRef.current === 'loading' || statusRef.current === 'authenticated')) return;
+
+    const operation = ++operationRef.current;
+    tokenRef.current = session.access_token;
+    setProfile(null);
+    setError(null);
+    changeStatus('loading');
     try {
       const response = await fetchAuthProfile(session.access_token);
-      if (!isCurrentRevision()) return 'superseded' satisfies SessionValidation;
-      if (!response.ok) {
-        const message = await responseError(response, 'This Google account is not on the authorized account list.');
-        if (!isCurrentRevision()) return 'superseded' satisfies SessionValidation;
-        if (response.status !== 401 && response.status !== 403) {
-          setProfile(null);
-          setStatus('unauthenticated');
-          setError('The sign-in service could not verify your account just now. Please try again.');
-          return 'unavailable' satisfies SessionValidation;
-        }
-        if (typeof window !== 'undefined') window.sessionStorage.setItem(LOGIN_ERROR_KEY, message);
+      if (operation !== operationRef.current) return;
+      if (response.status === 401 || response.status === 403) {
+        const message = await responseError(response, 'This account is not authorized to use the inventory dashboard.');
+        if (operation !== operationRef.current) return;
+        window.sessionStorage.setItem(LOGIN_ERROR_KEY, message);
+        tokenRef.current = null;
+        pendingPasswordRef.current = null;
         setProfile(null);
-        setStatus('unauthenticated');
-        setError(message);
-        await clientRef.current?.auth.signOut();
-        return 'rejected' satisfies SessionValidation;
+        changeStatus('loading');
+        // Do not expose the login form until the rejected session is cleared:
+        // a late SIGNED_OUT could otherwise erase a newly saved login.
+        try {
+          const { error: signOutError } = await withDeadline(
+            createBrowserClient().auth.signOut({ scope: 'local' }), 8_000
+          );
+          if (signOutError) throw signOutError;
+          if (operation === operationRef.current) await resolveNoSession(false);
+        } catch {
+          showUnavailable('Could not clear the rejected session. Please try again.', operation);
+        }
+        return;
       }
-
+      if (!response.ok) {
+        showUnavailable(VERIFICATION_ERROR, operation);
+        return;
+      }
       const nextProfile = await response.json() as AuthProfile;
-      if (!isCurrentRevision()) return 'superseded' satisfies SessionValidation;
-      setProfile(nextProfile);
-      setError(null);
-      setStatus('authenticated');
-      return 'authorized' satisfies SessionValidation;
+      if (operation === operationRef.current) acceptSession(session, nextProfile);
     } catch {
-      if (!isCurrentRevision()) return 'superseded' satisfies SessionValidation;
-      setProfile(null);
-      setStatus('unauthenticated');
-      setError('Could not validate your account right now. Check your connection and try again.');
-      return 'unavailable' satisfies SessionValidation;
+      showUnavailable(VERIFICATION_ERROR, operation);
     }
-  }, []);
+  }, [acceptSession, changeStatus, resolveNoSession, showUnavailable]);
+
+  const readInitialSession = useCallback(async () => {
+    const operation = ++operationRef.current;
+    try {
+      const client = clientRef.current || createBrowserClient();
+      clientRef.current = client;
+      const { data, error: sessionError } = await withDeadline(client.auth.getSession(), 10_000);
+      if (operation !== operationRef.current) return;
+      if (sessionError) {
+        showUnavailable('Your saved session could not be read. Please try again.', operation);
+      } else if (data.session) {
+        // A manual retry must run even when this is the same token that failed
+        // verification earlier. SIGNED_IN may have fired during getSession.
+        void verifySession(data.session, true);
+      } else {
+        void resolveNoSession(true);
+      }
+    } catch {
+      showUnavailable('Your saved session could not be read. Please try again.', operation);
+    }
+  }, [resolveNoSession, showUnavailable, verifySession]);
 
   useEffect(() => {
+    // The callback exchanges the OAuth code. This page verifies it once after
+    // the redirect to /, avoiding duplicate checks during navigation.
+    if (window.location.pathname === '/auth/callback') return;
+
     let active = true;
+    let receivedEvent = false;
+    let receivedNonInitialEvent = false;
     const handlePageShow = (event: PageTransitionEvent) => {
-      // A page restored from the back-forward cache keeps its React state.
-      // Clear the pending OAuth state so the user can choose another method.
       if (event.persisted) clearGoogleLoading();
     };
     window.addEventListener('pageshow', handlePageShow);
+    const initialTimer = window.setTimeout(() => {
+      if (!active || receivedEvent) return;
+      const operation = ++operationRef.current;
+      showUnavailable('Your session check took too long. Please try again.', operation);
+    }, 12_000);
+
     try {
       const client = createBrowserClient();
       clientRef.current = client;
       const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
-        if (!active) return;
-        if (event === 'INITIAL_SESSION') return;
-        const eventRevision = ++authRevisionRef.current;
-        if (event === 'SIGNED_OUT' || !session) {
-          clearGoogleLoading();
-          window.setTimeout(() => {
-            if (active) void setSignedOutState(undefined, eventRevision);
-          }, 0);
-        } else if (event !== 'SIGNED_IN') {
-          // Password sign-in validates explicitly after setSession. OAuth
-          // validates on its callback page and again on the root page load.
-          // Skipping SIGNED_IN here prevents duplicate, racing checks.
-          window.setTimeout(() => {
-            if (active) void validateSession(session, eventRevision);
-          }, 0);
-        }
-      });
-
-      const initialRevision = authRevisionRef.current;
-      void client.auth.getSession().then(({ data, error: sessionError }) => {
-        if (!active || initialRevision !== authRevisionRef.current) return;
-        if (sessionError) {
-          void setSignedOutState('Your sign-in session could not be read. Sign in again.', initialRevision);
-        } else if (data.session) {
-          void validateSession(data.session, initialRevision);
+        if (!active || (event === 'INITIAL_SESSION' && receivedNonInitialEvent)) return;
+        if (event !== 'INITIAL_SESSION') receivedNonInitialEvent = true;
+        receivedEvent = true;
+        window.clearTimeout(initialTimer);
+        if (event === 'INITIAL_SESSION' && !session) {
+          // Supabase also reports null when reading a stored session fails.
+          void readInitialSession();
+        } else if (event === 'SIGNED_OUT' || !session) {
+          void resolveNoSession(false);
         } else {
-          void setSignedOutState(undefined, initialRevision);
+          void verifySession(session, event === 'USER_UPDATED');
         }
       });
-
       return () => {
         active = false;
+        ++operationRef.current;
+        window.clearTimeout(initialTimer);
         window.removeEventListener('pageshow', handlePageShow);
         subscription.unsubscribe();
       };
     } catch (clientError) {
-      const message = clientError instanceof Error ? clientError.message : 'Supabase is not configured.';
-      const failedClientRevision = authRevisionRef.current;
-      window.setTimeout(() => { void setSignedOutState(message, failedClientRevision); }, 0);
+      const operation = ++operationRef.current;
+      showUnavailable(clientError instanceof Error ? clientError.message : 'Authentication is not configured.', operation);
       return () => {
         active = false;
+        ++operationRef.current;
+        window.clearTimeout(initialTimer);
         window.removeEventListener('pageshow', handlePageShow);
       };
     }
-  }, [clearGoogleLoading, setSignedOutState, validateSession]);
+  }, [clearGoogleLoading, readInitialSession, resolveNoSession, showUnavailable, verifySession]);
+
+  const retryAuthorization = useCallback(async () => {
+    setError(null);
+    changeStatus('loading');
+    await readInitialSession();
+  }, [changeStatus, readInitialSession]);
 
   const signInWithPassword = useCallback(async (emailOrUsername: string, password: string) => {
     const attempt = ++signInAttemptRef.current;
-    ++authRevisionRef.current;
+    ++operationRef.current;
+    let credentialsAccepted = false;
+    let acceptedToken: string | null = null;
     setError(null);
     setLoadingMethod('password');
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetchWithTimeout('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emailOrUsername, password }),
-      });
+      }, 15_000);
       if (!response.ok) throw new Error(await responseError(response, 'Invalid email/username or password.'));
 
-      const tokens = await response.json() as { access_token: string; refresh_token: string };
+      const result = await response.json() as {
+        access_token: string;
+        refresh_token: string;
+        profile: AuthProfile;
+      };
+      if (!result.access_token || !result.refresh_token || !result.profile?.id) {
+        throw new Error('The sign-in response was incomplete. Please try again.');
+      }
+      credentialsAccepted = true;
+      acceptedToken = result.access_token;
+      pendingPasswordRef.current = { accessToken: result.access_token, profile: result.profile };
       const client = clientRef.current || createBrowserClient();
       clientRef.current = client;
-      const { data, error: sessionError } = await client.auth.setSession(tokens);
-      if (sessionError || !data.session) throw new Error('Sign-in could not be completed. Try again.');
-      const validation = await validateSession(data.session, authRevisionRef.current);
-      if (validation === 'rejected') throw new Error('This account is not authorized to use the dashboard.');
-      if (validation === 'unavailable') throw new Error('Your credentials were accepted, but access could not be checked right now. Please try signing in again.');
+      const { data, error: sessionError } = await withDeadline(client.auth.setSession({
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+      }), 12_000);
+      if (attempt !== signInAttemptRef.current) return;
+      if (sessionError || !data.session || data.session.user.id !== result.profile.id) {
+        throw new Error('Your session could not be saved. Please try again.');
+      }
+      if (statusRef.current !== 'authenticated' || tokenRef.current !== data.session.access_token) {
+        acceptSession(data.session, result.profile);
+      }
     } catch (signInError) {
-      if (attempt === signInAttemptRef.current) {
-        setError(signInError instanceof Error ? signInError.message : 'Sign-in failed. Try again.');
+      if (attempt !== signInAttemptRef.current) return;
+      pendingPasswordRef.current = null;
+      const message = signInError instanceof Error && signInError.name === 'AbortError'
+        ? 'Sign-in took too long. Check your connection and try again.'
+        : signInError instanceof Error ? signInError.message : 'Sign-in failed. Please try again.';
+      if (credentialsAccepted && statusRef.current === 'authenticated' && tokenRef.current === acceptedToken) {
+        return;
+      }
+      if (credentialsAccepted) {
+        showUnavailable(message, ++operationRef.current);
+      } else {
+        setError(message);
       }
     } finally {
       if (attempt === signInAttemptRef.current) {
         setLoadingMethod((current) => current === 'password' ? null : current);
       }
     }
-  }, [validateSession]);
+  }, [acceptSession, showUnavailable]);
 
   const signInWithGoogle = useCallback(async () => {
     ++signInAttemptRef.current;
-    ++authRevisionRef.current;
     setError(null);
     clearGoogleLoading();
     setLoadingMethod('google');
     try {
       const client = clientRef.current || createBrowserClient();
       clientRef.current = client;
-      const { error: oauthError } = await client.auth.signInWithOAuth({
+      const { error: oauthError } = await withDeadline(client.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: { prompt: 'select_account' },
         },
-      });
+      }), 10_000);
       if (oauthError) throw oauthError;
-      // OAuth should navigate away immediately. This fallback recovers the
-      // login form if the redirect is blocked or the provider never opens.
       googleLoadingTimerRef.current = window.setTimeout(clearGoogleLoading, 15_000);
     } catch (oauthError) {
       setError(oauthError instanceof Error ? oauthError.message : 'Google sign-in could not be started.');
@@ -253,27 +334,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     ++signInAttemptRef.current;
-    ++authRevisionRef.current;
-    setError(null);
+    ++operationRef.current;
+    pendingPasswordRef.current = null;
     clearGoogleLoading();
+    setProfile(null);
+    changeStatus('loading');
     try {
-      await clientRef.current?.auth.signOut();
-    } finally {
-      setProfile(null);
-      setStatus('unauthenticated');
+      const client = clientRef.current || createBrowserClient();
+      clientRef.current = client;
+      const { error: signOutError } = await withDeadline(client.auth.signOut({ scope: 'local' }), 8_000);
+      if (signOutError) throw signOutError;
+      if (statusRef.current !== 'unauthenticated') await resolveNoSession(false);
+    } catch {
+      showUnavailable('Sign-out could not be completed. Check your connection and try again.', ++operationRef.current);
     }
-  }, [clearGoogleLoading]);
+  }, [changeStatus, clearGoogleLoading, resolveNoSession, showUnavailable]);
 
   const value = useMemo<AuthContextValue>(() => ({
-    status,
-    profile,
-    loadingMethod,
-    error,
-    signInWithPassword,
-    signInWithGoogle,
-    signOut,
+    status, profile, loadingMethod, error,
+    signInWithPassword, signInWithGoogle, signOut, retryAuthorization,
     clearError: () => setError(null),
-  }), [status, profile, loadingMethod, error, signInWithPassword, signInWithGoogle, signOut]);
+  }), [status, profile, loadingMethod, error, signInWithPassword, signInWithGoogle, signOut, retryAuthorization]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

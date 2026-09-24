@@ -149,7 +149,13 @@ export async function getAuthorizedActor(request: Request): Promise<AuthorizedAc
   const token = match[1];
   const authClient = createPublicAuthClient();
   const { data: { user }, error: authError } = await authClient.auth.getUser(token);
-  if (authError || !user?.email || !user.email_confirmed_at) return null;
+  if (authError) {
+    // Transport/server errors are not proof that this user is unauthorized.
+    // Let callers return a retryable 503 while preserving the browser session.
+    if (authError.status !== 400 && authError.status !== 401 && authError.status !== 403) throw authError;
+    return null;
+  }
+  if (!user?.email || !user.email_confirmed_at) return null;
   const userEmail = normalizeEmail(user.email);
 
   const admin = createAdminClient();
