@@ -98,7 +98,7 @@ export function EquipmentTable({
   const paginatedItems = sortedItems.slice(startIndex, startIndex + itemsPerPage);
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
+    <div className="equipment-table-theme-surface flex flex-1 min-h-0 flex-col overflow-hidden rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm">
       {/* Scrollable Table Area with Sticky Thead */}
       <div className="flex-1 min-h-0 overflow-auto relative">
         <table className="w-full min-w-[880px] text-left text-xs border-collapse">
@@ -237,7 +237,7 @@ export function EquipmentTable({
 
                     {/* 8. Actions: View, Edit, and Delete action buttons (shown on row hover) */}
                     <td className="whitespace-nowrap pr-4 pl-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="table-row-actions flex items-center justify-end gap-1">
                         <button
                           type="button"
                           data-equipment-id={item.id}

@@ -2,6 +2,22 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Keep row actions quiet for a mouse, while exposing them to keyboard and touch users. */
+.table-row-actions {
+  transition: opacity 150ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .table-row-actions {
+    opacity: 0;
+  }
+
+  .group:hover .table-row-actions,
+  .group:focus-within .table-row-actions {
+    opacity: 1;
+  }
+}
+
 :root {
   color-scheme: light;
   /* Page background — pure white for maximum contrast */
@@ -71,6 +87,31 @@ html.theme-transitioning *::after {
   transition-property: background-color, border-color, color, fill, stroke, box-shadow !important;
   transition-duration: 240ms !important;
   transition-timing-function: cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+/* The inventory table has many cells. Animate only its visible surfaces during a theme
+   change so each text fragment and icon does not create its own transition. */
+html.theme-transitioning .equipment-table-theme-surface,
+html.theme-transitioning .equipment-table-theme-surface thead,
+html.theme-transitioning .equipment-table-theme-surface tbody tr,
+html.theme-transitioning .equipment-table-theme-surface th,
+html.theme-transitioning .equipment-table-theme-surface td {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease !important;
+}
+
+html.theme-transitioning .equipment-table-theme-surface *,
+html.theme-transitioning .equipment-table-theme-surface *::before,
+html.theme-transitioning .equipment-table-theme-surface *::after {
+  transition: none !important;
+}
+
+html.theme-transitioning .equipment-table-theme-surface tbody td p {
+  transition: color 150ms ease !important;
+}
+
+html.theme-transitioning .equipment-table-theme-surface tbody td > span,
+html.theme-transitioning .equipment-table-theme-surface tbody td > div > span {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease !important;
 }
 
 body {
@@ -257,6 +298,16 @@ table tbody tr {
   html.theme-transitioning *,
   html.theme-transitioning *::before,
   html.theme-transitioning *::after {
+    transition: none !important;
+  }
+
+  html.theme-transitioning .equipment-table-theme-surface,
+  html.theme-transitioning .equipment-table-theme-surface *,
+  html.theme-transitioning .equipment-table-theme-surface *::before,
+  html.theme-transitioning .equipment-table-theme-surface *::after,
+  html.theme-transitioning .equipment-table-theme-surface tbody td p,
+  html.theme-transitioning .equipment-table-theme-surface tbody td > span,
+  html.theme-transitioning .equipment-table-theme-surface tbody td > div > span {
     transition: none !important;
   }
 }

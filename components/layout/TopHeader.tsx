@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SyncStatus } from '@/lib/inventoryService';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { useTheme } from '@/components/theme/ThemeProvider';
 
 interface TopHeaderProps {
   onOpenMobileMenu: () => void;
@@ -28,24 +29,12 @@ export function TopHeader({
   isRefreshing,
 }: TopHeaderProps) {
   const { profile, signOut } = useAuth();
-  const [isDark, setIsDark] = useState(false);
+  const { isDark, themeMode, toggleTheme } = useTheme();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const avatarFailed = Boolean(profile?.avatarUrl && failedAvatarUrl === profile.avatarUrl);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const profileTriggerRef = useRef<HTMLButtonElement>(null);
-  const themeTransitionTimer = useRef<number | null>(null);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setIsDark(document.documentElement.classList.contains('dark'));
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  useEffect(() => () => {
-    if (themeTransitionTimer.current) window.clearTimeout(themeTransitionTimer.current);
-  }, []);
 
   useEffect(() => {
     if (!isProfileOpen) return;
@@ -70,30 +59,11 @@ export function TopHeader({
     };
   }, [isProfileOpen]);
 
-  const toggleTheme = () => {
-    const nextDark = !isDark;
-    const root = document.documentElement;
-    if (themeTransitionTimer.current) window.clearTimeout(themeTransitionTimer.current);
-    root.classList.add('theme-transitioning');
-    setIsDark(nextDark);
-    if (nextDark) {
-      root.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      root.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-    themeTransitionTimer.current = window.setTimeout(() => {
-      root.classList.remove('theme-transitioning');
-      themeTransitionTimer.current = null;
-    }, 260);
-  };
-
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/95 px-4 py-2.5 backdrop-blur-md transition-colors dark:border-zinc-800/70 dark:bg-zinc-950/95 sm:px-6">
       <div className="flex items-center justify-between gap-3">
         {/* Left Side: Mobile toggle + Breadcrumb Title */}
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           {/* Hamburger button on mobile */}
           <button
             onClick={onOpenMobileMenu}
@@ -110,8 +80,9 @@ export function TopHeader({
               <span className="hidden text-xs font-semibold text-zinc-400 dark:text-zinc-500 sm:inline">
                 DENR /
               </span>
-              <h2 className="text-xs font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-sm">
-                {title}
+              <h2 className="truncate text-xs font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-sm">
+                <span className="sm:hidden">ICT Inventory</span>
+                <span className="hidden sm:inline">{title}</span>
               </h2>
             </div>
             <p className="hidden text-[10px] text-zinc-400 dark:text-zinc-500 md:block">
@@ -161,11 +132,11 @@ export function TopHeader({
             href="/scanner"
             className="flex h-9 items-center gap-1.5 rounded-xl bg-blue-600 px-3 text-sm font-bold text-white shadow-sm shadow-blue-500/30 transition hover:bg-blue-500 active:scale-95 sm:hidden"
             title="Open QR Scanner"
+            aria-label="Open QR scanner"
           >
             <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z" />
             </svg>
-            <span>Scan QR</span>
           </a>
           {/* Refresh button */}
           <button
@@ -193,9 +164,10 @@ export function TopHeader({
           <button
             onClick={toggleTheme}
             type="button"
-            className="hidden h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-2xs transition hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:flex"
-            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            aria-label="Toggle theme"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-2xs transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            title={themeMode === 'system' ? `Switch to ${isDark ? 'light' : 'dark'} appearance` : 'Use device appearance'}
+            aria-label={themeMode === 'system' ? `Switch to ${isDark ? 'light' : 'dark'} appearance` : 'Use device appearance'}
+            aria-pressed={themeMode !== 'system'}
           >
             {isDark ? (
               <svg className="h-4 w-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

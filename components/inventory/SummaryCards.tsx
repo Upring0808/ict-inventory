@@ -39,7 +39,7 @@ export function SummaryCards({
       ),
       color: 'from-blue-500/10 to-indigo-500/10 text-blue-600 dark:text-blue-400 border-blue-200/60 dark:border-blue-900/40',
       activeBorder: 'border-blue-500 ring-2 ring-blue-500/20 dark:border-blue-400',
-    },
+    }, 
     {
       id: 'Laptop Computers',
       name: 'Laptop Computers',
