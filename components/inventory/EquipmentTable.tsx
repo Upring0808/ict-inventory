@@ -46,19 +46,19 @@ function SortableHeader({
   const isSorted = sortField === field;
   return (
     <th
-      onClick={() => onSort(field)}
-      className={`group cursor-pointer select-none bg-inherit px-4 py-3 text-left text-xs font-bold uppercase tracking-wider transition ${
+      aria-sort={isSorted ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={`group select-none bg-inherit px-4 py-3 text-left text-xs font-bold uppercase tracking-wider transition ${
         isSorted
           ? 'text-zinc-950 dark:text-zinc-50'
           : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-100'
       } ${className}`}
     >
-      <span className="flex items-center gap-1.5">
+      <button type="button" onClick={() => onSort(field)} className="flex items-center gap-1.5 rounded text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
         {children}
         <span className={`text-[10px] ${isSorted ? 'text-blue-600 dark:text-blue-400 font-extrabold' : 'text-zinc-400 dark:text-zinc-600 group-hover:text-zinc-600'}`}>
           {isSorted ? (sortOrder === 'asc' ? '▲' : '▼') : '↕'}
         </span>
-      </span>
+      </button>
     </th>
   );
 }
@@ -144,15 +144,26 @@ export function EquipmentTable({
                 return (
                   <tr
                     key={item.id}
+                    tabIndex={0}
+                    aria-label={`View ${item.propertyNumber}, ${item.brand} ${item.model}`}
                     onClick={() => onViewDetails(item)}
-                    className="group cursor-pointer transition-colors even:bg-white odd:bg-slate-50/50 hover:bg-blue-50/70 dark:even:bg-zinc-900 dark:odd:bg-zinc-900/60 dark:hover:bg-zinc-800/80 row-animate"
+                    onKeyDown={(event) => {
+                      if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                        event.preventDefault();
+                        onViewDetails(item);
+                      }
+                    }}
+                    className="group cursor-pointer transition-colors even:bg-white odd:bg-slate-50/50 hover:bg-blue-50/70 focus-visible:bg-blue-50/70 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600 dark:even:bg-zinc-900 dark:odd:bg-zinc-900/60 dark:hover:bg-zinc-800/80 dark:focus-visible:bg-zinc-800 row-animate"
                     style={{ animationDelay: `${Math.min(idx, 20) * 16}ms` }}
                   >
                     {/* 1. Property Number + Serial Number */}
                     <td className="whitespace-nowrap pl-4 pr-3 py-2.5">
-                      <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-50 truncate max-w-[160px] group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={item.propertyNumber}>
-                        {item.propertyNumber}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="max-w-[160px] truncate text-xs font-semibold text-zinc-900 transition-colors group-hover:text-blue-600 dark:text-zinc-50 dark:group-hover:text-blue-400" title={item.propertyNumber}>
+                          {item.propertyNumber}
+                        </p>
+                        <span aria-hidden="true" className="rounded-full bg-blue-50 px-1.5 text-sm font-bold leading-4 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 sm:hidden">›</span>
+                      </div>
                       {item.serialNumber ? (
                         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate max-w-[160px]" title={`Serial No: ${item.serialNumber}`}>
                           SN: {item.serialNumber}
@@ -226,10 +237,13 @@ export function EquipmentTable({
 
                     {/* 8. Actions: View, Edit, and Delete action buttons (shown on row hover) */}
                     <td className="whitespace-nowrap pr-4 pl-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1">
                         <button
+                          type="button"
+                          data-equipment-id={item.id}
                           onClick={() => onViewDetails(item)}
-                          className="rounded-md p-1.5 text-zinc-500 hover:bg-blue-100 hover:text-blue-700 dark:text-zinc-400 dark:hover:bg-blue-950 dark:hover:text-blue-300 transition-colors"
+                          className="rounded-md p-1.5 text-blue-700 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-blue-600 dark:text-blue-300 dark:hover:bg-blue-950 transition-colors"
+                          aria-label={`View details for ${item.propertyNumber}`}
                           title="View Details"
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -238,18 +252,22 @@ export function EquipmentTable({
                           </svg>
                         </button>
                         <button
+                          type="button"
                           onClick={() => onEditItem(item)}
                           className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition-colors"
                           title="Edit"
+                          aria-label={`Edit ${item.propertyNumber}`}
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                         <button
+                          type="button"
                           onClick={() => onDeleteItem(item)}
                           className="rounded-md p-1.5 text-zinc-500 hover:bg-red-100 hover:text-red-700 dark:text-zinc-400 dark:hover:bg-red-950 dark:hover:text-red-300 transition-colors"
                           title="Delete"
+                          aria-label={`Delete ${item.propertyNumber}`}
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

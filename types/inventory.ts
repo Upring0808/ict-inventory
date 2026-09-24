@@ -27,6 +27,20 @@ export interface EquipmentVerification {
   method: 'qr';
 }
 
+/** Database-recorded custody handoff. This is appended by the transfer RPC. */
+export interface OwnershipTransfer {
+  id: string;
+  transferredAt: string;
+  fromPersonnel: string;
+  toPersonnel: string;
+  fromLocation: string;
+  toLocation: string;
+  reason: string;
+  actorName: string;
+  actorEmail: string;
+  actorUserId?: string;
+}
+
 export interface InventoryItem {
   id: string;
   propertyNumber: string;
@@ -63,6 +77,7 @@ export interface InventoryItem {
   lastVerifiedBy?: string;
   verificationCount?: number;
   verificationHistory?: EquipmentVerification[];
+  ownershipHistory?: OwnershipTransfer[];
 }
 
 export interface InventorySummary {

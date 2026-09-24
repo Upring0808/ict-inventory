@@ -5,11 +5,12 @@ import { AuthGate } from '@/components/auth/AuthGate';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { AccountSettings } from '@/components/settings/AccountSettings';
 import { ActivityLogView } from '@/components/settings/ActivityLogView';
-import { InventoryItem, FilterState, EquipmentStatusCategory } from '@/types/inventory';
+import { InventoryItem, FilterState } from '@/types/inventory';
 import {
   loadInventory,
   createItem,
   updateItem,
+  transferItemOwnership,
   deleteItem,
   subscribeToInventoryChanges,
   SyncStatus,
@@ -47,6 +48,7 @@ function InventoryDashboardContent() {
   const sidebarPreferenceReady = useRef(false);
   const editRouteHandled = useRef(false);
   const liveRefreshTimer = useRef<number | null>(null);
+  const detailOrigin = useRef<HTMLElement | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     source: 'local',
     isConnectedToSupabase: false,
@@ -88,7 +90,7 @@ function InventoryDashboardContent() {
     const { items: loaded, status } = await loadInventory();
     setItems(loaded);
     setDetailItem((current) => current
-      ? loaded.find((item) => item.id === current.id) ?? null
+      ? loaded.find((item) => item.id === current.id) ?? (status.source === 'supabase' ? null : current)
       : current
     );
     setSyncStatus(status);
@@ -169,6 +171,7 @@ function InventoryDashboardContent() {
 
   // Handle Tab Switch with Automatic Smart Filtering
   const handleSelectTab = (tab: SidebarTab) => {
+    setDetailItem(null);
     setCurrentTab(tab);
     if (tab === 'overview') {
       // Keep state intact
@@ -300,6 +303,40 @@ function InventoryDashboardContent() {
     }
   };
 
+  const handleOpenDetails = (item: InventoryItem) => {
+    detailOrigin.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+      ? document.activeElement
+      : null;
+    if (currentTab === 'overview') {
+      setCurrentTab('all');
+      setViewMode('table');
+      setFilters((previous) => ({
+        ...previous,
+        type: '',
+        location: '',
+        brand: '',
+        statusCategory: '',
+        shelfLife: '',
+        year: '',
+      }));
+    }
+    setDetailItem(item);
+  };
+
+  const handleCloseDetails = () => {
+    const itemId = detailItem?.id;
+    setDetailItem(null);
+    window.requestAnimationFrame(() => {
+      const itemAction = itemId
+        ? Array.from(document.querySelectorAll<HTMLElement>('[data-equipment-id]'))
+          .find((element) => element.dataset.equipmentId === itemId && element.getClientRects().length)
+        : null;
+      if (itemAction) itemAction.focus();
+      else if (detailOrigin.current?.isConnected && detailOrigin.current.getClientRects().length) detailOrigin.current.focus();
+      detailOrigin.current = null;
+    });
+  };
+
   const handleDeleteItem = async (item: InventoryItem) => {
     setIsDeleting(true);
     try {
@@ -315,22 +352,14 @@ function InventoryDashboardContent() {
     }
   };
 
-  const handleQuickStatusChange = async (
+  const handleTransferOwnership = async (
     item: InventoryItem,
-    newCategory: EquipmentStatusCategory
+    input: { newPersonnel: string; newLocation: string; reason: string }
   ) => {
-    try {
-      const updated = await updateItem({
-        ...item,
-        statusCategory: newCategory,
-        status: item.remarks ? `${newCategory} (${item.remarks})` : newCategory,
-      });
-      setItems((prev) => prev.map((it) => (it.id === item.id ? updated : it)));
-      setDetailItem(updated);
-      showToast(`Status updated to "${newCategory}"`);
-    } catch (updateError) {
-      showToast(updateError instanceof Error ? updateError.message : 'Equipment status could not be updated.');
-    }
+    const updated = await transferItemOwnership(item, input);
+    setItems((prev) => prev.map((current) => current.id === item.id ? updated : current));
+    setDetailItem(updated);
+    showToast(`Ownership transferred to ${updated.accountablePersonnel}`);
   };
 
   const handleExportCsv = () => {
@@ -424,7 +453,7 @@ function InventoryDashboardContent() {
                   setItemToEdit(null);
                   setIsModalOpen(true);
                 }}
-                onViewDetails={(item) => setDetailItem(item)}
+                onViewDetails={handleOpenDetails}
                 searchQuery={filters.searchQuery}
                 searchResults={filteredItems}
               />
@@ -433,7 +462,7 @@ function InventoryDashboardContent() {
             /* Category / Equipment Inventory View — keyed for re-mount fade */
             <div key={currentTab} className="tab-content flex flex-1 flex-col min-h-0 overflow-hidden space-y-3">
               {/* Category Header */}
-              <div className="shrink-0">
+              {!detailItem && <div className="shrink-0">
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
                   {currentTab === 'all' && 'All Equipment'}
                   {currentTab === 'desktops' && 'Desktop PCs'}
@@ -445,10 +474,10 @@ function InventoryDashboardContent() {
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">
                   {filteredItems.length} of {items.length} units
                 </p>
-              </div>
+              </div>}
 
               {/* Filter Bar */}
-              <div className="shrink-0 relative z-20">
+              {!detailItem && <div className="shrink-0 relative z-20">
                 <FilterBar
                   filters={filters}
                   onFilterChange={(newFilters) =>
@@ -476,14 +505,15 @@ function InventoryDashboardContent() {
                   onViewModeChange={setViewMode}
                   resultCount={filteredItems.length}
                 />
-              </div>
+              </div>}
 
               {/* Data View: Table or Grid Cards */}
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ display: detailItem ? 'none' : undefined }}>
                 {viewMode === 'table' ? (
                   <EquipmentTable
                     items={filteredItems}
-                    onViewDetails={(item) => setDetailItem(item)}
+                    onViewDetails={handleOpenDetails}
                     onEditItem={(item) => {
                       setItemToEdit(item);
                       setIsModalOpen(true);
@@ -494,7 +524,7 @@ function InventoryDashboardContent() {
                   <div className="flex-1 min-h-0 overflow-y-auto pr-1">
                     <EquipmentCards
                       items={filteredItems}
-                      onViewDetails={(item) => setDetailItem(item)}
+                      onViewDetails={handleOpenDetails}
                       onEditItem={(item) => {
                         setItemToEdit(item);
                         setIsModalOpen(true);
@@ -502,6 +532,21 @@ function InventoryDashboardContent() {
                       onDeleteItem={(item) => setItemToDelete(item)}
                     />
                   </div>
+                )}
+                </div>
+                {detailItem && (
+                  <EquipmentDetailDrawer
+                    key={detailItem.id}
+                    item={detailItem}
+                    onClose={handleCloseDetails}
+                    onEdit={(item) => {
+                      setItemToEdit(item);
+                      setIsModalOpen(true);
+                    }}
+                    onDelete={setItemToDelete}
+                    onTransfer={handleTransferOwnership}
+                    availableLocations={availableLocations}
+                  />
                 )}
               </div>
             </div>
@@ -517,20 +562,6 @@ function InventoryDashboardContent() {
         onSave={handleSaveItem}
         availableLocations={availableLocations}
         availableBrands={availableBrands}
-      />
-
-      <EquipmentDetailDrawer
-        item={detailItem}
-        onClose={() => setDetailItem(null)}
-        onEdit={(item) => {
-          setDetailItem(null);      // close view drawer first
-          setItemToEdit(item);
-          setIsModalOpen(true);     // then open edit modal above
-        }}
-        onDelete={(item) => {
-          setItemToDelete(item);
-        }}
-        onQuickStatusChange={handleQuickStatusChange}
       />
 
       <DeleteConfirmModal

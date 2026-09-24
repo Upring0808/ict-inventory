@@ -221,7 +221,7 @@ export function EquipmentModal({
               </div>
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                 {itemToEdit
-                  ? 'Update technical hardware specs, physical custody, lifecycle status, or maintenance history.'
+                  ? 'Update specifications, lifecycle status, or maintenance details. Use Transfer ownership to change custody.'
                   : 'Digitalize and add equipment details into the government property management system.'}
               </p>
             </div>
@@ -533,8 +533,9 @@ export function EquipmentModal({
                   required
                   value={accountablePersonnel}
                   onChange={(e) => setAccountablePersonnel(e.target.value)}
+                  disabled={Boolean(itemToEdit)}
                   placeholder="e.g. RODERICK Y. ABAD"
-                  className="w-full rounded-xl border border-zinc-200 bg-slate-50/60 px-3.5 py-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 shadow-2xs transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:border-zinc-700/70 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-blue-400 dark:focus:bg-zinc-900"
+                  className="w-full rounded-xl border border-zinc-200 bg-slate-50/60 px-3.5 py-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 shadow-2xs transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500 dark:border-zinc-700/70 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-blue-400 dark:focus:bg-zinc-900 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-400"
                 />
               </div>
 
@@ -548,8 +549,9 @@ export function EquipmentModal({
                   list="locations-list"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
+                  disabled={Boolean(itemToEdit)}
                   placeholder="e.g. ICT, FINANCE, RPS"
-                  className="w-full rounded-xl border border-zinc-200 bg-slate-50/60 px-3.5 py-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 shadow-2xs transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:border-zinc-700/70 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-blue-400 dark:focus:bg-zinc-900"
+                  className="w-full rounded-xl border border-zinc-200 bg-slate-50/60 px-3.5 py-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 shadow-2xs transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500 dark:border-zinc-700/70 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-blue-400 dark:focus:bg-zinc-900 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-400"
                 />
                 <datalist id="locations-list">
                   {availableLocations.map((loc) => (
@@ -558,6 +560,11 @@ export function EquipmentModal({
                 </datalist>
               </div>
             </div>
+            {itemToEdit && (
+              <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-[11px] text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+                Custody changes require a recorded handoff. Open this equipment&apos;s details and use Transfer ownership.
+              </p>
+            )}
           </div>
 
           {/* Card 4: Operational Condition & Maintenance */}

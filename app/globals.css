@@ -100,6 +100,18 @@ body {
   animation: tabFadeSlideUp 280ms var(--ease-spring) both;
 }
 
+/* Inventory list-to-record transition within the existing data pane. */
+@keyframes equipmentDetailEnter {
+  from { opacity: 0; transform: translateX(22px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.equipment-detail-surface {
+  animation: equipmentDetailEnter 270ms var(--ease-spring) both;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 /* KPI / stat card entrance — staggered via inline animation-delay */
 @keyframes cardEntrance {
   from {

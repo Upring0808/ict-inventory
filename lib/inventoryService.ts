@@ -1,5 +1,5 @@
 import { createBrowserClient } from '@/lib/supabase/client';
-import { EquipmentVerification, InventoryItem } from '@/types/inventory';
+import { EquipmentVerification, InventoryItem, OwnershipTransfer } from '@/types/inventory';
 import { initialInventoryItems } from '@/data/initialInventory';
 import { normalizeYearAcquired } from '@/lib/inventoryFormatting';
 
@@ -132,6 +132,9 @@ function mapDbRowToItem(row: Record<string, unknown>): InventoryItem {
   const verificationHistory = Array.isArray(row.verification_history)
     ? row.verification_history as EquipmentVerification[]
     : [];
+  const ownershipHistory = Array.isArray(row.ownership_history)
+    ? row.ownership_history as OwnershipTransfer[]
+    : [];
 
   return {
     id: String(row.id),
@@ -172,6 +175,7 @@ function mapDbRowToItem(row: Record<string, unknown>): InventoryItem {
       ? row.verification_count
       : Number(row.verification_count || verificationHistory.length) || undefined,
     verificationHistory,
+    ownershipHistory,
   };
 }
 
@@ -207,6 +211,7 @@ function mapItemToDbRow(item: InventoryItem): Record<string, unknown> {
     last_verified_by: item.lastVerifiedBy || null,
     verification_count: item.verificationCount || 0,
     verification_history: item.verificationHistory || [],
+    // ownership_history is database-managed and must never be sent by ordinary edits.
   };
 }
 
@@ -385,6 +390,58 @@ export async function updateItem(item: InventoryItem): Promise<InventoryItem> {
   saveLocalItems(updatedLocal);
 
   broadcastLocalChange('update', persisted.id);
+  return persisted;
+}
+
+export interface OwnershipTransferInput {
+  newPersonnel: string;
+  newLocation: string;
+  reason: string;
+}
+
+/**
+ * Changes custody in a single database transaction. The RPC locks the record,
+ * verifies the old custodian, and appends a server-stamped, attributed receipt.
+ */
+export async function transferItemOwnership(
+  item: InventoryItem,
+  input: OwnershipTransferInput
+): Promise<InventoryItem> {
+  const newPersonnel = input.newPersonnel.trim();
+  const newLocation = input.newLocation.trim().toUpperCase();
+  const reason = input.reason.trim();
+  if (!newPersonnel || !newLocation || !reason) {
+    throw new Error('Enter the new custodian, office, and reason for transfer.');
+  }
+  if (newPersonnel.toLowerCase() === item.accountablePersonnel.trim().toLowerCase() && newLocation === item.location.trim().toUpperCase()) {
+    throw new Error('Choose a different custodian or office for this transfer.');
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
+    throw new Error('Sync this equipment to Supabase before transferring ownership.');
+  }
+
+  const { data, error } = await createBrowserClient().rpc('transfer_equipment_ownership', {
+    p_equipment_id: item.id,
+    p_expected_personnel: item.accountablePersonnel,
+    p_expected_location: item.location,
+    p_new_personnel: newPersonnel,
+    p_new_location: newLocation,
+    p_reason: reason,
+  });
+  if (error || !data) {
+    if (error?.code === 'PGRST202' || error?.message.includes('transfer_equipment_ownership')) {
+      throw new Error('Ownership transfer is not installed in Supabase yet. Open Cloud Sync Assistant, apply its updated SQL schema, then try again.');
+    }
+    throw new Error(error?.message || 'The ownership transfer could not be recorded.');
+  }
+
+  const resultRow = Array.isArray(data) ? data[0] : data;
+  if (!resultRow || typeof resultRow !== 'object') {
+    throw new Error('The transfer was recorded, but its updated equipment record could not be read. Refresh inventory.');
+  }
+  const persisted = mapDbRowToItem(resultRow as Record<string, unknown>);
+  saveLocalItems(getLocalItems().map((existing) => existing.id === persisted.id ? persisted : existing));
+  broadcastLocalChange('transfer', persisted.id);
   return persisted;
 }
 

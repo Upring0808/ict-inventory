@@ -21,6 +21,8 @@ Run the full [`lib/supabase/schema.sql`](lib/supabase/schema.sql) script in Supa
 
 The script creates the two-account allowlist and activity log, removes previous equipment policies, permits database writes only for allowlisted signed-in users, and sets up the audit triggers. Equipment detail is read publicly through a server endpoint that returns one requested item; the equipment table itself is not readable with the public key.
 
+Run the full script again when updating an existing installation. It adds the ownership transfer function and custody history without deleting existing inventory. Transfers require this schema update before the new action can save.
+
 ### 2. Configure Supabase Auth
 
 - Enable the Email provider and Google provider.
@@ -58,6 +60,7 @@ Add the same four environment variables to the hosting environment, including Pr
 - `/verify?asset=…` and equipment QR codes remain public and read-only. Edit and QR verification controls appear only for an authorized signed-in user.
 - Equipment mutations are enforced by Supabase RLS. Local cache writes do not count as successful changes.
 - **Activity Log** records the user, action, equipment property number, changed fields, and timestamp. Equipment audit rows are written in the same database transaction as each equipment change.
+- **Transfer ownership** records the former and new accountable officer and office, reason, acting account, server time, and a receipt ID. The equipment detail page shows its handoff history; the Activity Log keeps a separate transaction entry. Ordinary edits cannot change custody without a transfer.
 - **Settings** manages the two authorized account records, including names, optional usernames, and password resets.
 
 ## Checks

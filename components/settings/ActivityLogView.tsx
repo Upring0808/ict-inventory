@@ -23,6 +23,7 @@ function actionLabel(action: string): string {
     'equipment.updated': 'Equipment updated',
     'equipment.deleted': 'Equipment deleted',
     'equipment.verified': 'Equipment verified',
+    'equipment.transferred': 'Ownership transferred',
     'account.created': 'User account created',
     'account.updated': 'User account updated',
     'account.deleted': 'User account removed',
@@ -155,7 +156,7 @@ export function ActivityLogView() {
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-400">Transparency</p>
           <h2 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl">Activity log</h2>
-          <p className="mt-1.5 text-sm leading-5 text-zinc-600 dark:text-zinc-400">A record of who changed or verified equipment and when.</p>
+          <p className="mt-1.5 text-sm leading-5 text-zinc-600 dark:text-zinc-400">A record of equipment changes, custody transfers, and QR checks.</p>
         </div>
 
         <div className="flex flex-wrap items-end gap-2.5">
@@ -208,10 +209,15 @@ export function ActivityLogView() {
             {events.map((event) => {
               const details = event.details || {};
               const changes = Object.entries(details).filter(([key]) => ![
-                'record', 'verification', 'password_reset', 'password', 'secret', 'access_token', 'refresh_token',
-              ].includes(key.toLowerCase()));
+                'record', 'verification', 'transfer', 'password_reset', 'password', 'secret', 'access_token', 'refresh_token',
+              ].includes(key.toLowerCase()) && !(
+                event.action === 'equipment.transferred' && ['accountable_personnel', 'location'].includes(key)
+              ));
               const verification = details.verification && typeof details.verification === 'object'
                 ? details.verification as Record<string, unknown>
+                : null;
+              const transfer = details.transfer && typeof details.transfer === 'object'
+                ? details.transfer as Record<string, unknown>
                 : null;
               const actorName = event.actor_name?.trim() || event.actor_email || 'Unknown user';
               const targetLabel = event.equipment_property_number || event.target_label || 'Inventory record';
@@ -245,13 +251,21 @@ export function ActivityLogView() {
                     {formattedTime}
                   </time>
 
-                  {(details.record !== undefined || details.password_reset === true || (verification && typeof verification.comment === 'string' && verification.comment) || changes.length > 0) ? (
+                  {(details.record !== undefined || details.password_reset === true || transfer || (verification && typeof verification.comment === 'string' && verification.comment) || changes.length > 0) ? (
                     <details className="col-span-2 border-t border-zinc-100 pt-2 text-xs dark:border-zinc-800 md:col-span-4">
                       <summary className="w-fit cursor-pointer select-none font-medium text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200">View details</summary>
                       <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
                         {details.record !== undefined ? <span className="max-w-full break-all text-xs leading-5 text-zinc-600 dark:text-zinc-400">{printable(details.record)}</span> : null}
                         {details.password_reset === true ? <span className="rounded-md bg-zinc-100 px-2 py-1 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">Password reset recorded</span> : null}
                         {verification && typeof verification.comment === 'string' && verification.comment ? <span className="rounded-md bg-zinc-50 px-2 py-1 text-xs leading-5 text-zinc-600 dark:bg-zinc-800/70 dark:text-zinc-300">{verification.comment}</span> : null}
+                        {transfer ? (
+                          <div className="w-full rounded-lg border border-blue-100 bg-blue-50/60 p-2.5 leading-5 text-zinc-700 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-zinc-200">
+                            <p><span className="font-semibold">Custodian:</span> {printable(transfer.fromPersonnel)} → {printable(transfer.toPersonnel)}</p>
+                            <p><span className="font-semibold">Office:</span> {printable(transfer.fromLocation)} → {printable(transfer.toLocation)}</p>
+                            <p><span className="font-semibold">Reason:</span> {printable(transfer.reason)}</p>
+                            <p className="mt-1 break-all font-mono text-[10px] text-zinc-500 dark:text-zinc-400">Receipt {printable(transfer.id)}</p>
+                          </div>
+                        ) : null}
                         {changes.map(([key, value]) => {
                           const change = value && typeof value === 'object' ? value as Record<string, unknown> : null;
                           if (change && 'from' in change && 'to' in change) {
@@ -272,7 +286,7 @@ export function ActivityLogView() {
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" strokeWidth="2" strokeLinecap="round" /></svg>
             </div>
             <h3 className="mt-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200">{selectedDate ? 'No activity on this day' : 'No activity recorded yet'}</h3>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{selectedDate ? 'Choose another date to review its activity.' : 'Equipment changes and QR verifications will appear here.'}</p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{selectedDate ? 'Choose another date to review its activity.' : 'Equipment changes, transfers, and QR verifications will appear here.'}</p>
           </div>
         )}
       </div>

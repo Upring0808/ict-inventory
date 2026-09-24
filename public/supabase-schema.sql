@@ -30,6 +30,7 @@ create table if not exists public.equipment (
   last_verified_by text,
   verification_count integer not null default 0,
   verification_history jsonb not null default '[]'::jsonb,
+  ownership_history jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now())
 );
@@ -39,6 +40,7 @@ alter table public.equipment add column if not exists last_verified_at timestamp
 alter table public.equipment add column if not exists last_verified_by text;
 alter table public.equipment add column if not exists verification_count integer not null default 0;
 alter table public.equipment add column if not exists verification_history jsonb not null default '[]'::jsonb;
+alter table public.equipment add column if not exists ownership_history jsonb not null default '[]'::jsonb;
 
 create index if not exists idx_equipment_prop_num on public.equipment (property_number);
 create index if not exists idx_equipment_type on public.equipment (equipment_type);
@@ -266,6 +268,113 @@ $$;
 revoke all on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean) from public, anon, authenticated;
 grant execute on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean) to service_role;
 
+-- Custody is changed only by the transfer function below. Direct updates must
+-- not silently rewrite the custodian or the receipt history.
+create or replace function public.guard_equipment_ownership()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.accountable_personnel is distinct from old.accountable_personnel
+    or new.location is distinct from old.location
+    or new.ownership_history is distinct from old.ownership_history then
+    if current_setting('app.ownership_transfer', true) is distinct from 'true' then
+      raise exception using errcode = '23514', message = 'Use Transfer ownership to change the accountable officer or office.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_equipment_ownership on public.equipment;
+create trigger guard_equipment_ownership
+  before update on public.equipment
+  for each row execute function public.guard_equipment_ownership();
+
+-- Row lock, old-custodian check, audit receipt, and custody update are atomic.
+-- The actor and time are supplied by Supabase Auth and PostgreSQL, not the UI.
+create or replace function public.transfer_equipment_ownership(
+  p_equipment_id uuid,
+  p_expected_personnel text,
+  p_expected_location text,
+  p_new_personnel text,
+  p_new_location text,
+  p_reason text
+)
+returns public.equipment
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_equipment public.equipment;
+  v_actor_name text;
+  v_actor_email text;
+  v_new_personnel text := trim(coalesce(p_new_personnel, ''));
+  v_new_location text := upper(trim(coalesce(p_new_location, '')));
+  v_reason text := trim(coalesce(p_reason, ''));
+  v_receipt jsonb;
+begin
+  if not public.is_authorized_inventory_user() then
+    raise exception using errcode = '42501', message = 'You are not authorized to transfer equipment.';
+  end if;
+  if v_new_personnel = '' or v_new_location = '' or v_reason = '' then
+    raise exception using errcode = '22023', message = 'New custodian, office, and transfer reason are required.';
+  end if;
+  if length(v_new_personnel) > 180 or length(v_new_location) > 180 or length(v_reason) > 1000 then
+    raise exception using errcode = '22023', message = 'Transfer details are too long.';
+  end if;
+
+  select * into v_equipment
+  from public.equipment
+  where id = p_equipment_id
+  for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'Equipment was not found.';
+  end if;
+  if v_equipment.accountable_personnel is distinct from p_expected_personnel
+    or v_equipment.location is distinct from p_expected_location then
+    raise exception using errcode = '40001', message = 'Custody changed since you opened this equipment. Refresh and try again.';
+  end if;
+  if lower(trim(v_equipment.accountable_personnel)) = lower(v_new_personnel)
+    and upper(trim(v_equipment.location)) = v_new_location then
+    raise exception using errcode = '22023', message = 'The new custodian and office are unchanged.';
+  end if;
+
+  v_actor_email := lower(auth.jwt() ->> 'email');
+  select account.full_name into v_actor_name
+  from public.authorized_accounts as account
+  where account.auth_user_id = auth.uid() and lower(account.email) = v_actor_email
+  limit 1;
+  v_receipt := jsonb_build_object(
+    'id', gen_random_uuid()::text,
+    'transferredAt', clock_timestamp(),
+    'fromPersonnel', v_equipment.accountable_personnel,
+    'toPersonnel', v_new_personnel,
+    'fromLocation', v_equipment.location,
+    'toLocation', v_new_location,
+    'reason', v_reason,
+    'actorName', coalesce(v_actor_name, v_actor_email),
+    'actorEmail', v_actor_email,
+    'actorUserId', auth.uid()::text
+  );
+
+  perform set_config('app.ownership_transfer', 'true', true);
+  update public.equipment
+  set accountable_personnel = v_new_personnel,
+      location = v_new_location,
+      ownership_history = jsonb_build_array(v_receipt) || coalesce(v_equipment.ownership_history, '[]'::jsonb)
+  where id = p_equipment_id
+  returning * into v_equipment;
+  perform set_config('app.ownership_transfer', '', true);
+  return v_equipment;
+end;
+$$;
+
+revoke all on function public.transfer_equipment_ownership(uuid, text, text, text, text, text) from public, anon;
+grant execute on function public.transfer_equipment_ownership(uuid, text, text, text, text, text) to authenticated;
+
 create or replace function public.audit_equipment_change()
 returns trigger
 language plpgsql
@@ -299,7 +408,10 @@ begin
   elsif tg_op = 'UPDATE' then
     v_target_id := new.id;
     v_property_number := new.property_number;
-    if new.last_verified_at is distinct from old.last_verified_at then
+    if new.ownership_history is distinct from old.ownership_history then
+      v_action := 'equipment.transferred';
+      v_details := jsonb_build_object('transfer', new.ownership_history -> 0);
+    elsif new.last_verified_at is distinct from old.last_verified_at then
       v_action := 'equipment.verified';
       v_details := jsonb_build_object('verification', new.verification_history -> 0);
     else
@@ -308,7 +420,7 @@ begin
     v_old := to_jsonb(old);
     v_new := to_jsonb(new);
     for v_key, v_value in select key, value from jsonb_each(v_new) loop
-      if v_key not in ('id', 'created_at', 'updated_at', 'verification_history')
+      if v_key not in ('id', 'created_at', 'updated_at', 'verification_history', 'ownership_history')
         and v_value is distinct from (v_old -> v_key) then
         v_details := v_details || jsonb_build_object(
           v_key,
@@ -410,3 +522,6 @@ exception
   when duplicate_object or undefined_object then null;
 end;
 $$;
+
+-- Make newly created RPC signatures available to PostgREST immediately.
+notify pgrst, 'reload schema';
