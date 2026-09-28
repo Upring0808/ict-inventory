@@ -53,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInAttemptRef = useRef(0);
   const tokenRef = useRef<string | null>(null);
   const pendingPasswordRef = useRef<PendingPasswordSession | null>(null);
+  const profileRef = useRef<AuthProfile | null>(null);
   const statusRef = useRef<AuthStatus>('loading');
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [profile, setProfile] = useState<AuthProfile | null>(null);
@@ -75,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const showUnavailable = useCallback((message: string, operation: number) => {
     if (operation !== operationRef.current) return;
+    profileRef.current = null;
     setProfile(null);
     setError(message);
     changeStatus('unavailable');
@@ -84,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ++operationRef.current;
     tokenRef.current = session.access_token;
     pendingPasswordRef.current = null;
+    profileRef.current = nextProfile;
     setProfile(nextProfile);
     setError(null);
     setLoadingMethod(null);
@@ -92,8 +95,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resolveNoSession = useCallback(async (checkSetup: boolean) => {
     const operation = ++operationRef.current;
+    // A settled login/setup screen should not disappear when an OAuth tab is
+    // closed or this document becomes visible again without a new session.
+    if (checkSetup && (statusRef.current === 'unauthenticated' || statusRef.current === 'setup_required')) {
+      clearGoogleLoading();
+      const loginError = takeLoginError();
+      if (loginError) setError(loginError);
+      return;
+    }
     tokenRef.current = null;
     pendingPasswordRef.current = null;
+    profileRef.current = null;
     setProfile(null);
     clearGoogleLoading();
     setError(takeLoginError());
@@ -128,11 +140,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!force && tokenRef.current === session.access_token &&
       (statusRef.current === 'loading' || statusRef.current === 'authenticated')) return;
 
+    // Refocusing a tab can refresh the token for the same signed-in user.
+    // Revalidate access in the background without unmounting the dashboard.
+    const isRevalidation = statusRef.current === 'authenticated' &&
+      profileRef.current?.id === session.user.id;
     const operation = ++operationRef.current;
     tokenRef.current = session.access_token;
-    setProfile(null);
     setError(null);
-    changeStatus('loading');
+    if (!isRevalidation) {
+      profileRef.current = null;
+      setProfile(null);
+      changeStatus('loading');
+    }
+
+    const verificationFailed = () => {
+      if (operation !== operationRef.current) return;
+      if (isRevalidation) {
+        // A network failure is not a sign-out. Let the next auth event retry
+        // this token while the last server-authorized profile stays visible.
+        tokenRef.current = null;
+      } else {
+        showUnavailable(VERIFICATION_ERROR, operation);
+      }
+    };
     try {
       const response = await fetchAuthProfile(session.access_token);
       if (operation !== operationRef.current) return;
@@ -142,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.sessionStorage.setItem(LOGIN_ERROR_KEY, message);
         tokenRef.current = null;
         pendingPasswordRef.current = null;
+        profileRef.current = null;
         setProfile(null);
         changeStatus('loading');
         // Do not expose the login form until the rejected session is cleared:
@@ -158,34 +189,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (!response.ok) {
-        showUnavailable(VERIFICATION_ERROR, operation);
+        verificationFailed();
         return;
       }
       const nextProfile = await response.json() as AuthProfile;
       if (operation === operationRef.current) acceptSession(session, nextProfile);
     } catch {
-      showUnavailable(VERIFICATION_ERROR, operation);
+      verificationFailed();
     }
   }, [acceptSession, changeStatus, resolveNoSession, showUnavailable]);
 
-  const readInitialSession = useCallback(async () => {
-    const operation = ++operationRef.current;
+  const readInitialSession = useCallback(async (forceVerification = true) => {
+    // A visibility check must not cancel a verification already in progress.
+    const operation = forceVerification ? ++operationRef.current : operationRef.current;
+    const isBackgroundRead = !forceVerification && statusRef.current === 'authenticated';
+    const sessionReadFailed = (message: string) => {
+      if (!isBackgroundRead) showUnavailable(message, operation);
+    };
     try {
       const client = clientRef.current || createBrowserClient();
       clientRef.current = client;
       const { data, error: sessionError } = await withDeadline(client.auth.getSession(), 10_000);
       if (operation !== operationRef.current) return;
       if (sessionError) {
-        showUnavailable('Your saved session could not be read. Please try again.', operation);
+        sessionReadFailed('Your saved session could not be read. Please try again.');
       } else if (data.session) {
         // A manual retry must run even when this is the same token that failed
         // verification earlier. SIGNED_IN may have fired during getSession.
-        void verifySession(data.session, true);
+        void verifySession(data.session, forceVerification);
       } else {
-        void resolveNoSession(true);
+        void resolveNoSession(statusRef.current !== 'authenticated');
       }
     } catch {
-      showUnavailable('Your saved session could not be read. Please try again.', operation);
+      sessionReadFailed('Your saved session could not be read. Please try again.');
     }
   }, [resolveNoSession, showUnavailable, verifySession]);
 
@@ -197,10 +233,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let active = true;
     let receivedEvent = false;
     let receivedNonInitialEvent = false;
+    let pageWasHidden = false;
+    let resumeCheckTimer: number | null = null;
+    const recheckOnResume = () => {
+      clearGoogleLoading();
+      if (resumeCheckTimer !== null) return;
+      resumeCheckTimer = window.setTimeout(() => {
+        resumeCheckTimer = null;
+        if (active) void readInitialSession(false);
+      }, 0);
+    };
     const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) clearGoogleLoading();
+      if (!event.persisted) return;
+      // Mobile Safari may restore the pre-OAuth login document from its
+      // back/forward cache. Its React state is stale, so reconcile it with the
+      // Supabase session saved by the callback before leaving the login screen.
+      recheckOnResume();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        pageWasHidden = true;
+        return;
+      }
+      if (!pageWasHidden) return;
+      pageWasHidden = false;
+      recheckOnResume();
     };
     window.addEventListener('pageshow', handlePageShow);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     const initialTimer = window.setTimeout(() => {
       if (!active || receivedEvent) return;
       const operation = ++operationRef.current;
@@ -228,7 +288,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         active = false;
         ++operationRef.current;
         window.clearTimeout(initialTimer);
+        if (resumeCheckTimer !== null) window.clearTimeout(resumeCheckTimer);
         window.removeEventListener('pageshow', handlePageShow);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
         subscription.unsubscribe();
       };
     } catch (clientError) {
@@ -236,9 +298,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       showUnavailable(clientError instanceof Error ? clientError.message : 'Authentication is not configured.', operation);
       return () => {
         active = false;
+        // This sequence counter must invalidate the latest pending operation.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         ++operationRef.current;
         window.clearTimeout(initialTimer);
+        if (resumeCheckTimer !== null) window.clearTimeout(resumeCheckTimer);
         window.removeEventListener('pageshow', handlePageShow);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       };
     }
   }, [clearGoogleLoading, readInitialSession, resolveNoSession, showUnavailable, verifySession]);
@@ -337,6 +403,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ++operationRef.current;
     pendingPasswordRef.current = null;
     clearGoogleLoading();
+    profileRef.current = null;
     setProfile(null);
     changeStatus('loading');
     try {

@@ -30,6 +30,8 @@ export function createBrowserClient(): SupabaseClient {
       // the app explicitly exchanges it and validates the allowlisted account.
       flowType: 'pkce',
       detectSessionInUrl: false,
+      persistSession: true,
+      autoRefreshToken: true,
     },
   });
   return client;
