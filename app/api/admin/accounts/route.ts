@@ -265,11 +265,13 @@ export async function PATCH(request: Request) {
     }
 
     let warning: string | undefined;
+    let passwordUpdated = false;
     if (password && account.auth_user_id) {
       const { error: passwordError } = await admin.auth.admin.updateUserById(account.auth_user_id, { password });
       if (passwordError) {
         warning = 'Other account details were saved, but the password could not be updated. Please retry the password change.';
       } else {
+        passwordUpdated = true;
         const { error: auditError } = await saveAccount(true);
         if (auditError) {
           console.error('The password changed but its account activity marker could not be saved:', auditError);
@@ -279,7 +281,14 @@ export async function PATCH(request: Request) {
     }
 
     return Response.json(
-      { ok: true, reauthenticate: emailChanged && account.auth_user_id === actor.id, ...(warning ? { warning } : {}) },
+      {
+        ok: true,
+        reauthenticate: (emailChanged || passwordUpdated) && account.auth_user_id === actor.id,
+        emailChanged,
+        passwordUpdated,
+        account: { id, name, email, username },
+        ...(warning ? { warning } : {}),
+      },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch {

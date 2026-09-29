@@ -5,8 +5,29 @@ import { normalizeYearAcquired } from '@/lib/inventoryFormatting';
 
 const LOCAL_STORAGE_KEY = 'ict_inventory_data_v3';
 const LEGACY_STORAGE_KEY = 'ict_inventory_data_v2';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const INVENTORY_BROADCAST_CHANNEL = 'ict_inventory_sync_channel';
 export const INVENTORY_CUSTOM_EVENT = 'ict:inventory:changed';
+
+function isPersistedItem(item: InventoryItem): boolean {
+  return UUID_PATTERN.test(item.id);
+}
+
+function createEquipmentId(): string {
+  return crypto.randomUUID();
+}
+
+function replaceLocalItem(previous: InventoryItem, persisted: InventoryItem) {
+  const previousPropertyNumber = previous.propertyNumber.trim().toLowerCase();
+  const persistedPropertyNumber = persisted.propertyNumber.trim().toLowerCase();
+  const localItems = getLocalItems().filter((item) =>
+    item.id !== previous.id &&
+    item.id !== persisted.id &&
+    item.propertyNumber.trim().toLowerCase() !== previousPropertyNumber &&
+    item.propertyNumber.trim().toLowerCase() !== persistedPropertyNumber
+  );
+  saveLocalItems([persisted, ...localItems]);
+}
 
 export function broadcastLocalChange(action: string, itemId?: string) {
   if (typeof window === 'undefined') return;
@@ -137,7 +158,7 @@ function mapDbRowToItem(row: Record<string, unknown>): InventoryItem {
     : [];
 
   return {
-    id: String(row.id),
+    id: row.id == null ? '' : String(row.id),
     propertyNumber: String(row.property_number),
     serialNumber: row.serial_number ? String(row.serial_number) : undefined,
     equipmentType: row.equipment_type as InventoryItem['equipmentType'],
@@ -306,12 +327,36 @@ export async function loadInventory(): Promise<{ items: InventoryItem[]; status:
     }
 
     if (!data || data.length === 0) {
+      if (localItems.length > 0) {
+        const syncResult = await pushAllToSupabase({ assignIdsForNewItems: true });
+        if (syncResult.success) {
+          const syncedItems = getLocalItems();
+          return {
+            items: syncedItems,
+            status: {
+              source: 'supabase',
+              isConnectedToSupabase: true,
+              message: `Automatically synchronized ${syncResult.count} local equipment records to Supabase.`,
+            },
+          };
+        } else {
+          return {
+            items: localItems,
+            status: {
+              source: 'local',
+              isConnectedToSupabase: true,
+              message: `Connected to Supabase, but automatic equipment sync failed: ${syncResult.error || 'Unknown error'}`,
+            },
+          };
+        }
+      }
+
       return {
         items: localItems,
         status: {
-          source: 'local',
+          source: 'supabase',
           isConnectedToSupabase: true,
-          message: 'Connected to Supabase. Table is ready and empty (click "Sync to Cloud" to upload).',
+          message: 'Connected to Supabase. The equipment table is ready and empty.',
         },
       };
     }
@@ -354,12 +399,15 @@ export async function createItem(newItem: Omit<InventoryItem, 'id' | 'createdAt'
 
   const { data, error } = await createBrowserClient()
     .from('equipment')
-    .insert([mapItemToDbRow(itemToInsert)])
+    .insert([{ id: createEquipmentId(), ...mapItemToDbRow(itemToInsert) }])
     .select()
     .single();
   if (error || !data) throw new Error(error?.message || 'Equipment could not be saved to Supabase.');
 
   const persisted = mapDbRowToItem(data);
+  if (!isPersistedItem(persisted)) {
+    throw new Error('Supabase saved equipment without a valid record ID. Apply the updated Supabase schema and try again.');
+  }
   saveLocalItems([persisted, ...localItems]);
   broadcastLocalChange('create', persisted.id);
   return persisted;
@@ -375,7 +423,7 @@ export async function updateItem(item: InventoryItem): Promise<InventoryItem> {
     yearAcquired: normalizeYearAcquired(item.yearAcquired, item.propertyNumber),
   };
   const supabase = createBrowserClient();
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedItem.id);
+  const isUuid = isPersistedItem(normalizedItem);
 
   const query = isUuid
     ? supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('id', normalizedItem.id).select().single()
@@ -396,7 +444,7 @@ export async function updateItem(item: InventoryItem): Promise<InventoryItem> {
 export interface OwnershipTransferInput {
   newPersonnel: string;
   newLocation: string;
-  reason: string;
+  reason?: string;
 }
 
 /**
@@ -409,21 +457,76 @@ export async function transferItemOwnership(
 ): Promise<InventoryItem> {
   const newPersonnel = input.newPersonnel.trim();
   const newLocation = input.newLocation.trim().toUpperCase();
-  const reason = input.reason.trim();
-  if (!newPersonnel || !newLocation || !reason) {
-    throw new Error('Enter the new custodian, office, and reason for transfer.');
+  const reason = input.reason?.trim() || '';
+  if (!newPersonnel || !newLocation) {
+    throw new Error('Enter the new custodian and office for transfer.');
   }
-  if (newPersonnel.toLowerCase() === item.accountablePersonnel.trim().toLowerCase() && newLocation === item.location.trim().toUpperCase()) {
+
+  // Older local-cache records may not have a Supabase UUID yet. Insert them
+  // automatically before transfer; if the property number already exists,
+  // keep the database record as the source of truth.
+  let persistedItem = item;
+  if (!isPersistedItem(item)) {
+    const supabase = createBrowserClient();
+    const { data: inserted, error: insertError } = await supabase
+      .from('equipment')
+      .upsert({ id: createEquipmentId(), ...mapItemToDbRow({ ...item, propertyNumber: item.propertyNumber.trim() }) }, {
+        onConflict: 'property_number',
+        ignoreDuplicates: true,
+      })
+      .select('*')
+      .maybeSingle();
+
+    if (insertError) {
+      throw new Error(insertError.message || 'Equipment could not be synced to Supabase before transfer.');
+    }
+
+    let row = inserted;
+    if (!row) {
+      const { data: existing, error: readError } = await supabase
+        .from('equipment')
+        .select('*')
+        .eq('property_number', item.propertyNumber.trim())
+        .maybeSingle();
+      if (readError || !existing) {
+        throw new Error(readError?.message || 'Equipment could not be found in Supabase after syncing.');
+      }
+      row = existing;
+    }
+
+    if (row.id == null) {
+      const { data: repaired, error: repairError } = await supabase
+        .from('equipment')
+        .update({ id: createEquipmentId() })
+        .eq('property_number', item.propertyNumber.trim())
+        .is('id', null)
+        .select('*')
+        .maybeSingle();
+      if (repairError || !repaired) {
+        throw new Error(repairError?.message || 'Supabase returned a record without an ID and could not repair it. Apply the updated Supabase schema, then retry.');
+      }
+      row = repaired;
+    }
+
+    persistedItem = mapDbRowToItem(row as Record<string, unknown>);
+    if (!isPersistedItem(persistedItem)) {
+      throw new Error('Supabase did not return a valid equipment ID. Apply the updated Supabase schema, then retry.');
+    }
+    replaceLocalItem(item, persistedItem);
+    broadcastLocalChange('sync', persistedItem.id);
+  }
+
+  if (newPersonnel.toLowerCase() === persistedItem.accountablePersonnel.trim().toLowerCase() && newLocation === persistedItem.location.trim().toUpperCase()) {
     throw new Error('Choose a different custodian or office for this transfer.');
   }
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)) {
-    throw new Error('Sync this equipment to Supabase before transferring ownership.');
+  if (!isPersistedItem(persistedItem)) {
+    throw new Error('This equipment has no valid Supabase record ID. Apply the updated Supabase schema and retry the transfer.');
   }
 
   const { data, error } = await createBrowserClient().rpc('transfer_equipment_ownership', {
-    p_equipment_id: item.id,
-    p_expected_personnel: item.accountablePersonnel,
-    p_expected_location: item.location,
+    p_equipment_id: persistedItem.id,
+    p_expected_personnel: persistedItem.accountablePersonnel,
+    p_expected_location: persistedItem.location,
     p_new_personnel: newPersonnel,
     p_new_location: newLocation,
     p_reason: reason,
@@ -431,6 +534,9 @@ export async function transferItemOwnership(
   if (error || !data) {
     if (error?.code === 'PGRST202' || error?.message.includes('transfer_equipment_ownership')) {
       throw new Error('Ownership transfer is not installed in Supabase yet. Open Cloud Sync Assistant, apply its updated SQL schema, then try again.');
+    }
+    if (error?.code === '22023' && /reason/i.test(error.message)) {
+      throw new Error('This Supabase database still requires a transfer reason. Open Cloud Sync Assistant and apply the updated SQL schema to make it optional, then try again.');
     }
     throw new Error(error?.message || 'The ownership transfer could not be recorded.');
   }
@@ -440,7 +546,7 @@ export async function transferItemOwnership(
     throw new Error('The transfer was recorded, but its updated equipment record could not be read. Refresh inventory.');
   }
   const persisted = mapDbRowToItem(resultRow as Record<string, unknown>);
-  saveLocalItems(getLocalItems().map((existing) => existing.id === persisted.id ? persisted : existing));
+  replaceLocalItem(persistedItem, persisted);
   broadcastLocalChange('transfer', persisted.id);
   return persisted;
 }
@@ -561,7 +667,7 @@ export function subscribeToInventoryChanges(onChange: () => void): () => void {
  */
 export async function deleteItem(id: string, propertyNumber: string): Promise<boolean> {
   const supabase = createBrowserClient();
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const isUuid = UUID_PATTERN.test(id);
   const query = isUuid
     ? supabase.from('equipment').delete().eq('id', id).select('id').maybeSingle()
     : supabase.from('equipment').delete().eq('property_number', propertyNumber).select('id').maybeSingle();
@@ -578,7 +684,9 @@ export async function deleteItem(id: string, propertyNumber: string): Promise<bo
 /**
  * Batch pushes all current items to Supabase table safely without duplicate key collisions.
  */
-export async function pushAllToSupabase(): Promise<{ success: boolean; count: number; error?: string }> {
+export async function pushAllToSupabase(
+  options: { assignIdsForNewItems?: boolean } = {}
+): Promise<{ success: boolean; count: number; error?: string }> {
   let items = getLocalItems();
   try {
     const supabase = createBrowserClient();
@@ -591,7 +699,10 @@ export async function pushAllToSupabase(): Promise<{ success: boolean; count: nu
     }
 
     // 2. Map items to database rows
-    const rows = items.map(mapItemToDbRow);
+    const rows = items.map((item) => ({
+      ...(options.assignIdsForNewItems ? { id: isPersistedItem(item) ? item.id : createEquipmentId() } : {}),
+      ...mapItemToDbRow(item),
+    }));
 
     // 3. Strict deduplication by property_number to guarantee no intra-batch collisions
     const dedupedRowsMap = new Map<string, Record<string, unknown>>();
@@ -603,16 +714,28 @@ export async function pushAllToSupabase(): Promise<{ success: boolean; count: nu
 
     // 4. Batch in chunks of 50 for optimal network performance and reliability
     const BATCH_SIZE = 50;
+    const persistedByPropertyNumber = new Map<string, InventoryItem>();
     for (let i = 0; i < safeRows.length; i += BATCH_SIZE) {
       const chunk = safeRows.slice(i, i + BATCH_SIZE);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('equipment')
-        .upsert(chunk, { onConflict: 'property_number' });
+        .upsert(chunk, { onConflict: 'property_number' })
+        .select('*');
 
       if (error) {
         return { success: false, count: 0, error: error.message };
       }
+      for (const row of data || []) {
+        const persisted = mapDbRowToItem(row as Record<string, unknown>);
+        persistedByPropertyNumber.set(persisted.propertyNumber.trim().toLowerCase(), persisted);
+      }
     }
+
+    const refreshedItems = items.map((item) =>
+      persistedByPropertyNumber.get(item.propertyNumber.trim().toLowerCase()) || item
+    );
+    saveLocalItems(refreshedItems);
+    broadcastLocalChange('sync');
 
     return { success: true, count: safeRows.length };
   } catch (err: unknown) {

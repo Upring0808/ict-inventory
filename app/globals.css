@@ -79,39 +79,27 @@ html.dark .dark\:text-zinc-400 { color: #bdc1c6 !important; }
 html.dark .dark\:text-zinc-500 { color: #9aa0a6 !important; }
 html.dark .card { background: #292a2d; border-color: #3c4043; }
 
-/* Added only while the mode switch runs, so normal interactions stay snappy. */
+/* Theme changes cross-fade one browser-composited viewport snapshot. */
 html.theme-transitioning,
 html.theme-transitioning *,
 html.theme-transitioning *::before,
 html.theme-transitioning *::after {
-  transition-property: background-color, border-color, color, fill, stroke, box-shadow !important;
-  transition-duration: 240ms !important;
-  transition-timing-function: cubic-bezier(0.2, 0, 0, 1) !important;
-}
-
-/* The inventory table has many cells. Animate only its visible surfaces during a theme
-   change so each text fragment and icon does not create its own transition. */
-html.theme-transitioning .equipment-table-theme-surface,
-html.theme-transitioning .equipment-table-theme-surface thead,
-html.theme-transitioning .equipment-table-theme-surface tbody tr,
-html.theme-transitioning .equipment-table-theme-surface th,
-html.theme-transitioning .equipment-table-theme-surface td {
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease !important;
-}
-
-html.theme-transitioning .equipment-table-theme-surface *,
-html.theme-transitioning .equipment-table-theme-surface *::before,
-html.theme-transitioning .equipment-table-theme-surface *::after {
   transition: none !important;
 }
 
-html.theme-transitioning .equipment-table-theme-surface tbody td p {
-  transition: color 150ms ease !important;
+::view-transition-group(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-html.theme-transitioning .equipment-table-theme-surface tbody td > span,
-html.theme-transitioning .equipment-table-theme-surface tbody td > div > span {
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease !important;
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
 }
 
 body {
@@ -294,20 +282,4 @@ table tbody tr {
     transition-duration: 1ms !important;
   }
 
-  html.theme-transitioning,
-  html.theme-transitioning *,
-  html.theme-transitioning *::before,
-  html.theme-transitioning *::after {
-    transition: none !important;
-  }
-
-  html.theme-transitioning .equipment-table-theme-surface,
-  html.theme-transitioning .equipment-table-theme-surface *,
-  html.theme-transitioning .equipment-table-theme-surface *::before,
-  html.theme-transitioning .equipment-table-theme-surface *::after,
-  html.theme-transitioning .equipment-table-theme-surface tbody td p,
-  html.theme-transitioning .equipment-table-theme-surface tbody td > span,
-  html.theme-transitioning .equipment-table-theme-surface tbody td > div > span {
-    transition: none !important;
-  }
 }

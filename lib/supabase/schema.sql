@@ -35,6 +35,34 @@ create table if not exists public.equipment (
   updated_at timestamptz not null default timezone('utc'::text, now())
 );
 
+-- Normalize legacy text IDs, then repair rows with missing UUIDs.
+alter table public.equipment add column if not exists id uuid default gen_random_uuid();
+drop trigger if exists audit_equipment_change on public.equipment;
+do $equipment_id_migration$
+declare
+  v_id_type text;
+begin
+  select data_type into v_id_type
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'equipment' and column_name = 'id';
+
+  if v_id_type in ('text', 'character varying', 'character') then
+    alter table public.equipment alter column id drop default;
+    update public.equipment
+    set id = case
+      when id::text ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        then id::text
+      else gen_random_uuid()::text
+    end;
+    alter table public.equipment alter column id type uuid using id::uuid;
+  end if;
+end;
+$equipment_id_migration$;
+update public.equipment set id = gen_random_uuid() where id is null;
+alter table public.equipment alter column id set default gen_random_uuid();
+alter table public.equipment alter column id set not null;
+create unique index if not exists idx_equipment_id_unique on public.equipment (id);
+
 -- Migration-safe additions for existing inventory tables.
 alter table public.equipment add column if not exists last_verified_at timestamptz;
 alter table public.equipment add column if not exists last_verified_by text;
@@ -319,8 +347,8 @@ begin
   if not public.is_authorized_inventory_user() then
     raise exception using errcode = '42501', message = 'You are not authorized to transfer equipment.';
   end if;
-  if v_new_personnel = '' or v_new_location = '' or v_reason = '' then
-    raise exception using errcode = '22023', message = 'New custodian, office, and transfer reason are required.';
+  if v_new_personnel = '' or v_new_location = '' then
+    raise exception using errcode = '22023', message = 'New custodian and office are required.';
   end if;
   if length(v_new_personnel) > 180 or length(v_new_location) > 180 or length(v_reason) > 1000 then
     raise exception using errcode = '22023', message = 'Transfer details are too long.';

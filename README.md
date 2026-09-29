@@ -21,7 +21,7 @@ Run the full [`lib/supabase/schema.sql`](lib/supabase/schema.sql) script in Supa
 
 The script creates the two-account allowlist and activity log, removes previous equipment policies, permits database writes only for allowlisted signed-in users, and sets up the audit triggers. Equipment detail is read publicly through a server endpoint that returns one requested item; the equipment table itself is not readable with the public key.
 
-Run the full script again when updating an existing installation. It adds the ownership transfer function and custody history without deleting existing inventory. Transfers require this schema update before the new action can save.
+Run the full script again when updating an existing installation. It converts legacy text equipment IDs to UUIDs, repairs missing IDs, adds the ownership transfer function and custody history without deleting existing inventory, and updates transfer validation so the reason is optional. Apply the updated schema in Supabase for these database changes to take effect.
 
 ### 2. Configure Supabase Auth
 
@@ -33,21 +33,16 @@ Run the full script again when updating an existing installation. It adds the ow
 
 ### 3. Set environment variables
 
-Set these in `.env.local` for local development and in the hosting environment for deployment. The OpenAI settings enable AI-assisted remark improvements.
+Set these in `.env.local` for local development and in the hosting environment for deployment.
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SECRET_KEY=your-server-only-secret-key
 INVENTORY_BOOTSTRAP_SECRET=your-random-secret-of-at-least-32-characters
-OPENAI_API_KEY=your-server-only-openai-api-key
-# Optional; defaults to gpt-6-luna
-OPENAI_REMARKS_MODEL=gpt-6-luna
 ```
 
 `SUPABASE_SECRET_KEY` may instead be named `SUPABASE_SERVICE_ROLE_KEY`. Keep it server-only and never prefix it with `NEXT_PUBLIC_`. `INVENTORY_BOOTSTRAP_SECRET` is used only to create the first account; once the account exists, `/api/setup` is locked.
-
-`OPENAI_API_KEY` enables **Improve with AI** in the equipment remarks field. Keep it server-only. The feature sends only the remark text to OpenAI and requests that the generated response not be stored. The suggestion replaces the editable field but is not saved until you save the equipment item.
 
 ### 4. Create the two user accounts
 
@@ -57,7 +52,7 @@ The login page accepts each account's email or optional username and password. G
 
 ### 5. Deploy
 
-Add the Supabase settings to the hosting environment, including Production and any Preview environment that should connect to Supabase. Add `OPENAI_API_KEY` to the environments where you want AI-assisted remark improvements, then redeploy. Google redirect URLs must include the deployed `/auth/callback` URL.
+Add the Supabase settings to the hosting environment, including Production and any Preview environment that should connect to Supabase. Google redirect URLs must include the deployed `/auth/callback` URL.
 
 ## Access and accountability
 
@@ -65,7 +60,7 @@ Add the Supabase settings to the hosting environment, including Production and a
 - `/verify?asset=…` and equipment QR codes remain public and read-only. Edit and QR verification controls appear only for an authorized signed-in user.
 - Equipment mutations are enforced by Supabase RLS. Local cache writes do not count as successful changes.
 - **Activity Log** records the user, action, equipment property number, changed fields, and timestamp. Equipment audit rows are written in the same database transaction as each equipment change.
-- **Transfer ownership** records the former and new accountable officer and office, reason, acting account, server time, and a receipt ID. The equipment detail page shows its handoff history; the Activity Log keeps a separate transaction entry. Ordinary edits cannot change custody without a transfer.
+- **Transfer ownership** records the former and new accountable officer and office, optional reason, acting account, server time, and a receipt ID. The equipment detail page shows its handoff history; the Activity Log keeps a separate transaction entry. Ordinary edits cannot change custody without a transfer.
 - **Settings** manages the two authorized account records, including names, optional usernames, and password resets.
 
 ## Checks

@@ -30,53 +30,26 @@ export async function GET(request: Request) {
     const admin = createAdminClient();
     let activityQuery = admin
       .from('activity_log')
-      .select('id,actor_user_id,actor_name,actor_email,action,target_type,target_id,target_label,equipment_property_number,details,occurred_at', { count: 'exact' });
+      .select('id,actor_user_id,actor_name,actor_email,action,target_type,target_id,target_label,equipment_property_number,details,occurred_at');
     if (from && to) activityQuery = activityQuery.gte('occurred_at', from.toISOString()).lt('occurred_at', to.toISOString());
-    const { data, count, error } = await activityQuery
+    // Fetch one extra row so pagination can determine whether more results exist
+    // without asking Postgres for an exact count of the full history.
+    const { data, error } = await activityQuery
       .order('occurred_at', { ascending: false })
       .order('id', { ascending: false })
-      .range(offset, offset + limit - 1);
+      .range(offset, offset + limit);
     if (error) return Response.json({ error: 'Could not load the activity history.' }, { status: 503 });
 
-    const activeIds = await admin
-      .from('authorized_accounts')
-      .select('auth_user_id')
-      .not('auth_user_id', 'is', null)
-      .limit(2);
-    const actorIds = new Set((activeIds.data || [])
-      .map((account) => account.auth_user_id)
-      .filter((id): id is string => Boolean(id)));
-    const eventActorIds = new Set((data || [])
-      .map((event) => event.actor_user_id)
-      .filter((id): id is string => typeof id === 'string' && actorIds.has(id)));
-    const avatarByActorId = new Map<string, string>();
-
-    await Promise.all([...eventActorIds].map(async (id) => {
-      if (id === actor.id && actor.avatarUrl?.startsWith('https://')) {
-        avatarByActorId.set(id, actor.avatarUrl);
-        return;
-      }
-      try {
-        const { data: authResult } = await admin.auth.admin.getUserById(id);
-        const metadata = authResult.user?.user_metadata as Record<string, unknown> | null;
-        const avatarUrl = typeof metadata?.avatar_url === 'string'
-          ? metadata.avatar_url
-          : typeof metadata?.picture === 'string'
-            ? metadata.picture
-            : null;
-        if (avatarUrl?.startsWith('https://')) avatarByActorId.set(id, avatarUrl);
-      } catch {
-        // Keep the activity available if a profile image cannot be loaded.
-      }
-    }));
-
-    const events = (data || []).map((event) => ({
+    const rows = data || [];
+    const hasMore = rows.length > limit;
+    const events = rows.slice(0, limit).map((event) => ({
       ...event,
-      actor_avatar_url: event.actor_user_id ? avatarByActorId.get(event.actor_user_id) || null : null,
+      actor_avatar_url: event.actor_user_id === actor.id && actor.avatarUrl?.startsWith('https://')
+        ? actor.avatarUrl
+        : null,
     }));
-    const total = count || 0;
     return Response.json(
-      { events, total, hasMore: offset + events.length < total, limit, offset },
+      { events, hasMore, limit, offset },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch {

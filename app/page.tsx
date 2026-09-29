@@ -420,8 +420,17 @@ function InventoryDashboardContent() {
             </div>
           )}
 
+          {/* Keep both admin screens mounted so their protected data loads once
+              and stays ready while the user moves between dashboard tabs. */}
+          <div hidden={currentTab !== 'settings'} aria-hidden={currentTab !== 'settings'} className="tab-content">
+            <AccountSettings />
+          </div>
+          <div hidden={currentTab !== 'activity'} aria-hidden={currentTab !== 'activity'} className="tab-content">
+            <ActivityLogView isActive={currentTab === 'activity'} />
+          </div>
+
           {/* Loading Skeleton */}
-          {isLoading ? (
+          {currentTab === 'settings' || currentTab === 'activity' ? null : isLoading ? (
             <div className="space-y-5 py-8">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {[0, 1, 2].map((i) => (
@@ -433,14 +442,6 @@ function InventoryDashboardContent() {
                 <div className="skeleton h-56 rounded-2xl" />
                 <div className="skeleton h-56 rounded-2xl" />
               </div>
-            </div>
-          ) : currentTab === 'settings' ? (
-            <div key="settings" className="tab-content">
-              <AccountSettings />
-            </div>
-          ) : currentTab === 'activity' ? (
-            <div key="activity" className="tab-content">
-              <ActivityLogView />
             </div>
           ) : currentTab === 'overview' ? (
             /* Executive Analytics & Graph View — keyed for re-mount fade */

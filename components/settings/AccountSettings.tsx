@@ -102,33 +102,53 @@ export function AccountSettings() {
         body: JSON.stringify({ id: account.id, name: data.get('name'), email, username, password }),
       });
       if (!response.ok) throw new Error(await readApiError(response, 'The account could not be updated.'));
-      const updateResult = await response.json().catch(() => null) as { reauthenticate?: boolean; warning?: string } | null;
+      const updateResult = await response.json().catch(() => null) as {
+        reauthenticate?: boolean;
+        emailChanged?: boolean;
+        passwordUpdated?: boolean;
+        warning?: string;
+        account?: Pick<AuthorizedAccount, 'id' | 'name' | 'email' | 'username'>;
+      } | null;
       const isCurrentUser = account.isCurrentUser;
+      const emailChanged = updateResult?.emailChanged === true;
+      const passwordUpdated = updateResult?.passwordUpdated === true;
+      const credentialsChanged = emailChanged || passwordUpdated;
+      const signInAgain = emailChanged && passwordUpdated
+        ? 'Your email and password were updated. Sign in again with both.'
+        : emailChanged
+          ? 'Your email address was updated. Sign in again with your new email address.'
+          : 'Your password was updated. Sign in again with your new password.';
+      const updatedAccount = updateResult?.account;
+      if (updatedAccount) {
+        setAccounts((current) => current.map((savedAccount) =>
+          savedAccount.id === updatedAccount.id
+            ? { ...savedAccount, ...updatedAccount }
+            : savedAccount
+        ));
+      }
       if (updateResult?.warning) {
         form.reset();
-        await loadAccounts();
         setError(updateResult.warning);
-        if (isCurrentUser && updateResult.reauthenticate) {
+        if (isCurrentUser && updateResult.reauthenticate && credentialsChanged) {
           window.sessionStorage.setItem(
             'ict_inventory_login_error',
-            `${updateResult.warning} Your email address was updated. Sign in again with your new email address.`,
+            `${updateResult.warning} ${signInAgain}`,
           );
           await signOut();
           return;
         }
         return;
       }
-      if (isCurrentUser && updateResult?.reauthenticate) {
+      if (isCurrentUser && updateResult?.reauthenticate && credentialsChanged) {
         window.sessionStorage.setItem(
           'ict_inventory_login_error',
-          'Your email address was updated. Sign in again with your new email address.',
+          signInAgain,
         );
         await signOut();
         return;
       }
       setSuccess(password ? 'Account details and password updated.' : 'Account details updated.');
       form.reset();
-      await loadAccounts();
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'The account could not be updated.');
     } finally {
