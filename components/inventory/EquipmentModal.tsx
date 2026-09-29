@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   InventoryItem,
   EquipmentType,
@@ -8,6 +8,7 @@ import {
   ShelfLifeCategory,
 } from '@/types/inventory';
 import { StatusBadge } from './StatusBadge';
+import { authorizedApiFetch, readApiError } from '@/lib/auth/client';
 
 interface EquipmentModalProps {
   isOpen: boolean;
@@ -48,6 +49,9 @@ export function EquipmentModal({
   const [datePmsConducted, setDatePmsConducted] = useState('');
   const [statusCategory, setStatusCategory] = useState<EquipmentStatusCategory>('Serviceable');
   const [remarks, setRemarks] = useState('');
+  const [isImprovingRemarks, setIsImprovingRemarks] = useState(false);
+  const [remarksError, setRemarksError] = useState('');
+  const remarksRequestRef = useRef<AbortController | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -96,10 +100,16 @@ export function EquipmentModal({
       setStatusCategory('Serviceable');
       setRemarks('');
       }
+      setRemarksError('');
+      setIsImprovingRemarks(false);
       setError('');
     }, 0);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      remarksRequestRef.current?.abort();
+      remarksRequestRef.current = null;
+    };
   }, [itemToEdit, isOpen]);
 
   if (!isOpen) return null;
@@ -163,6 +173,53 @@ export function EquipmentModal({
       setError(err instanceof Error ? err.message : 'Failed to save equipment.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleImproveRemarks = async () => {
+    const sourceRemarks = remarks;
+    if (!sourceRemarks.trim()) return;
+
+    setIsImprovingRemarks(true);
+    setRemarksError('');
+    const controller = new AbortController();
+    remarksRequestRef.current = controller;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 35_000);
+
+    try {
+      const response = await authorizedApiFetch('/api/inventory/improve-remarks', {
+        method: 'POST',
+        body: JSON.stringify({ remarks: sourceRemarks }),
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted || remarksRequestRef.current !== controller) return;
+
+      if (!response.ok) {
+        throw new Error(await readApiError(response, 'Could not improve these remarks.'));
+      }
+
+      const result = await response.json() as { remarks?: unknown };
+      if (typeof result.remarks !== 'string' || !result.remarks.trim()) {
+        throw new Error('The AI did not return an improved remark. Please try again.');
+      }
+
+      setRemarks(result.remarks.trim());
+    } catch (err: unknown) {
+      if (remarksRequestRef.current === controller && timedOut) {
+        setRemarksError('Improving the remarks took too long. Please try again.');
+      } else if (remarksRequestRef.current === controller && !controller.signal.aborted) {
+        setRemarksError(err instanceof Error ? err.message : 'Could not improve these remarks.');
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      if (remarksRequestRef.current === controller) {
+        remarksRequestRef.current = null;
+        setIsImprovingRemarks(false);
+      }
     }
   };
 
@@ -621,17 +678,43 @@ export function EquipmentModal({
 
               {/* Maintenance Remarks & Defect Details */}
               <div className="sm:col-span-2">
-                <label className="mb-1.5 flex items-center justify-between text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  <span>Maintenance Remarks & Defect Details</span>
-                  <span className="text-[10px] font-normal text-zinc-400">Displayed in Remarks column</span>
-                </label>
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <label htmlFor="equipment-remarks" className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                    Maintenance Remarks & Defect Details
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleImproveRemarks()}
+                    disabled={!remarks.trim() || isImprovingRemarks}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900/70 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/70"
+                  >
+                    {isImprovingRemarks ? (
+                      <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3Zm7 12 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z" />
+                      </svg>
+                    )}
+                    {isImprovingRemarks ? 'Improving…' : 'Improve with AI'}
+                  </button>
+                </div>
                 <textarea
+                  id="equipment-remarks"
                   rows={2}
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
+                  disabled={isImprovingRemarks}
                   placeholder="e.g. Upgrade of HDD to SSD recommended; Screen replacement needed; Battery defective"
-                  className="w-full min-h-[72px] resize-y rounded-xl border border-zinc-200 bg-slate-50/60 px-3.5 py-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 shadow-2xs transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:border-zinc-700/70 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-blue-400 dark:focus:bg-zinc-900"
+                  className="w-full min-h-[72px] resize-y rounded-xl border border-zinc-200 bg-slate-50/60 px-3.5 py-2.5 text-xs text-zinc-900 placeholder:text-zinc-400 shadow-2xs transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-blue-500/10 disabled:cursor-wait disabled:opacity-70 dark:border-zinc-700/70 dark:bg-zinc-800/50 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-blue-400 dark:focus:bg-zinc-900"
                 />
+                <p aria-live="polite" className={`mt-1.5 text-[10px] ${remarksError ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                  {remarksError || (isImprovingRemarks
+                    ? 'Creating a suggestion…'
+                    : 'Displayed in the Remarks column. Review the AI suggestion before saving.')}
+                </p>
               </div>
             </div>
           </div>
@@ -649,7 +732,7 @@ export function EquipmentModal({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isImprovingRemarks}
               className="inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-600/25 hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50"
               style={{ background: 'linear-gradient(135deg, #16a34a 0%, #2563eb 100%)' }}
             >

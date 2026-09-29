@@ -33,16 +33,21 @@ Run the full script again when updating an existing installation. It adds the ow
 
 ### 3. Set environment variables
 
-Set these in `.env.local` for local development and in the hosting environment for deployment:
+Set these in `.env.local` for local development and in the hosting environment for deployment. The OpenAI settings enable AI-assisted remark improvements.
 
 ```text
 NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SECRET_KEY=your-server-only-secret-key
 INVENTORY_BOOTSTRAP_SECRET=your-random-secret-of-at-least-32-characters
+OPENAI_API_KEY=your-server-only-openai-api-key
+# Optional; defaults to gpt-6-luna
+OPENAI_REMARKS_MODEL=gpt-6-luna
 ```
 
 `SUPABASE_SECRET_KEY` may instead be named `SUPABASE_SERVICE_ROLE_KEY`. Keep it server-only and never prefix it with `NEXT_PUBLIC_`. `INVENTORY_BOOTSTRAP_SECRET` is used only to create the first account; once the account exists, `/api/setup` is locked.
+
+`OPENAI_API_KEY` enables **Improve with AI** in the equipment remarks field. Keep it server-only. The feature sends only the remark text to OpenAI and requests that the generated response not be stored. The suggestion replaces the editable field but is not saved until you save the equipment item.
 
 ### 4. Create the two user accounts
 
@@ -52,7 +57,7 @@ The login page accepts each account's email or optional username and password. G
 
 ### 5. Deploy
 
-Add the same four environment variables to the hosting environment, including Production and any Preview environment that should connect to Supabase, then redeploy. Google redirect URLs must include the deployed `/auth/callback` URL.
+Add the Supabase settings to the hosting environment, including Production and any Preview environment that should connect to Supabase. Add `OPENAI_API_KEY` to the environments where you want AI-assisted remark improvements, then redeploy. Google redirect URLs must include the deployed `/auth/callback` URL.
 
 ## Access and accountability
 
