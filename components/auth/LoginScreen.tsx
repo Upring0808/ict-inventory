@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useState, type FormEvent } from 'react';
+import { AppBrand } from '@/components/branding/AppBrand';
 import { createBrowserClient } from '@/lib/supabase/client';
 import styles from './LoginScreen.module.css';
 
@@ -130,12 +131,13 @@ export function LoginScreen({
           />
 
           <div className={styles.formInner}>
-            <header className={styles.brand}>
-              <Image src="/auth/penro-batanes-mark.png" alt="" width={42} height={42} className={styles.brandMark} />
-              <div>
-                <p className={styles.brandSmall}>PENRO Batanes</p>
-                <p className={styles.brandName}>ICT Inventory</p>
-              </div>
+            <header>
+              <AppBrand
+                organizationClassName={styles.brandSmall}
+                nameClassName={styles.brandName}
+                markClassName={styles.brandMark}
+                className={styles.brand}
+              />
             </header>
 
             {view === 'sign-in' ? (

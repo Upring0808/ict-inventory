@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { AppBrand } from '@/components/branding/AppBrand';
 import { SyncStatus } from '@/lib/inventoryService';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useTheme } from '@/components/theme/ThemeProvider';
@@ -77,9 +78,7 @@ export function TopHeader({
 
           <div>
             <div className="flex items-center gap-2">
-              <span className="hidden text-xs font-semibold text-zinc-400 dark:text-zinc-500 sm:inline">
-                DENR /
-              </span>
+              <AppBrand variant="mark" size={26} decorative />
               <h2 className="truncate text-xs font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-sm">
                 <span className="sm:hidden">ICT Inventory</span>
                 <span className="hidden sm:inline">{title}</span>

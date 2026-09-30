@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { AppBrand } from '@/components/branding/AppBrand';
 import { InventorySummary } from '@/types/inventory';
 import { SyncStatus } from '@/lib/inventoryService';
 
@@ -178,25 +179,16 @@ export function Sidebar({
           }`}
       >
         {/* Logo / Title */}
-        <div className="relative flex items-center justify-between px-4 py-4 border-b border-zinc-100 dark:border-zinc-800/60">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white shadow-md"
-              style={{ background: 'linear-gradient(135deg, #16a34a 0%, #2563eb 100%)' }}
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
-            <div className={`sidebar-label overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-32 opacity-100'}`}>
-              <p className="text-[11px] font-black tracking-widest text-zinc-900 uppercase dark:text-zinc-50">
-                PENRO Batanes
-              </p>
-              <p className="text-[9px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-                ICT Inventory
-              </p>
-            </div>
-          </div>
+        <div className={`relative flex items-center justify-between border-b border-zinc-100 px-4 py-4 dark:border-zinc-800/60 ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}`}>
+          <AppBrand
+            size={32}
+            showOrganization={!isCollapsed}
+            showName={!isCollapsed}
+            organizationClassName="block truncate text-[9px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider"
+            nameClassName="block truncate text-[11px] font-black tracking-widest text-zinc-900 uppercase dark:text-zinc-50"
+            className="inline-flex min-w-0 items-center gap-2.5"
+            markClassName="inline-flex h-8 w-8 shrink-0"
+          />
           <button
             onClick={onCloseMobile}
             className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 lg:hidden"

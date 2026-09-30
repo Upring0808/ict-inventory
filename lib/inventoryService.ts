@@ -201,7 +201,9 @@ function mapDbRowToItem(row: Record<string, unknown>): InventoryItem {
 }
 
 // Map InventoryItem to DB row
-function mapItemToDbRow(item: InventoryItem): Record<string, unknown> {
+type EquipmentDbRow = Record<string, unknown> & { property_number: string };
+
+function mapItemToDbRow(item: InventoryItem): EquipmentDbRow {
   return {
     property_number: item.propertyNumber,
     serial_number: item.serialNumber || null,
