@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { AppBrand } from '@/components/branding/AppBrand';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { CameraIcon } from '@/components/icons/CameraIcon';
 import { findPublicEquipment, recordPublicQrVerification } from '@/lib/publicEquipmentClient';
 import type { InventoryItem } from '@/types/inventory';
 import { EquipmentVerificationActionPanel } from './EquipmentVerificationActionPanel';
@@ -16,7 +16,6 @@ interface EquipmentVerificationExperienceProps {
 }
 
 export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVerificationExperienceProps) {
-  const router = useRouter();
   const { profile, status: authStatus } = useAuth();
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,6 +27,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const scannerRedirectTimer = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -63,6 +63,12 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
     };
   }, [propertyNumber, loadAttempt]);
 
+  useEffect(() => () => {
+    if (scannerRedirectTimer.current !== null) {
+      window.clearTimeout(scannerRedirectTimer.current);
+    }
+  }, []);
+
   const handleVerify = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!item || !profile || !confirmed || isSaving) return;
@@ -82,8 +88,8 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
       setVerificationComment('');
       setResolveActiveRemark(false);
       setSuccessMessage('Check-in saved. Returning to the scanner…');
-      window.setTimeout(() => {
-        router.push('/scanner');
+      scannerRedirectTimer.current = window.setTimeout(() => {
+        window.location.assign(new URL('/scanner', window.location.origin).href);
       }, 1600);
     } catch {
       setErrorMessage('We could not save this check-in. Check your connection and try again.');
@@ -110,9 +116,11 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
           />
           <Link
             href="/scanner"
-            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg px-2.5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700/50 dark:text-emerald-300 dark:hover:bg-slate-900"
+            aria-label="Scan equipment QR code"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#123640] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#174955] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
           >
-            Back to scanner
+            <CameraIcon />
+            Scan
           </Link>
         </nav>
 

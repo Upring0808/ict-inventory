@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { getVerificationPathFromScan } from '@/lib/qrEquipment';
+import { CameraIcon } from '@/components/icons/CameraIcon';
 
 interface BarcodeDetectorLike {
   detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>>;
@@ -12,10 +11,10 @@ interface BarcodeDetectorLike {
 type ScanStatus = 'starting' | 'scanning' | 'unsupported' | 'error' | 'scanned';
 
 export function ScannerPage() {
-  const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
+  const redirectTimerRef = useRef<number | null>(null);
   const isDetectingRef = useRef(false);
   const hasScannedRef = useRef(false);
 
@@ -36,8 +35,8 @@ export function ScannerPage() {
     stopCamera();
     setStatus('scanned');
     setFlashActive(true);
-    router.push(path);
-  }, [router, stopCamera]);
+    redirectTimerRef.current = window.setTimeout(() => window.location.replace(path), 80);
+  }, [stopCamera]);
 
   useEffect(() => {
     let active = true;
@@ -105,6 +104,7 @@ export function ScannerPage() {
     void startScanner();
     return () => {
       active = false;
+      if (redirectTimerRef.current !== null) window.clearTimeout(redirectTimerRef.current);
       stopCamera();
     };
   }, [handleScanned, stopCamera]);
@@ -139,13 +139,16 @@ export function ScannerPage() {
               <h1 className="text-base font-bold text-white">QR Scanner</h1>
             </div>
           </div>
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:bg-zinc-700 hover:text-white"
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) window.history.back();
+              else window.location.replace('/');
+            }}
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-800 px-3 text-sm font-semibold text-zinc-100 transition-colors hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
           >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9.75L12 3l9 6.75V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.75z" /></svg>
-            Dashboard
-          </Link>
+            Back
+          </button>
         </div>
       </div>
 
@@ -192,7 +195,7 @@ export function ScannerPage() {
           <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/80 p-8">
             <div className="text-center">
               <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-rose-500/20 text-rose-400">
-                <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.867V15.133a1 1 0 01-1.447.902L15 14M3 8h12a2 2 0 012 2v4a2 2 0 01-2 2H3a2 2 0 01-2-2v-4a2 2 0 012-2z" /></svg>
+                <CameraIcon className="h-7 w-7" />
               </div>
               <p className="text-sm font-semibold text-white">Camera unavailable</p>
               <p className="mt-1 text-xs text-zinc-400">{message}</p>

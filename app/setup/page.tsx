@@ -2,10 +2,8 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 export default function InitialSetupPage() {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
@@ -31,7 +29,7 @@ export default function InitialSetupPage() {
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || 'Initial setup could not be completed.');
       setIsComplete(true);
-      window.setTimeout(() => router.replace('/'), 1200);
+      window.setTimeout(() => window.location.replace('/'), 1200);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Initial setup could not be completed.');
     } finally {

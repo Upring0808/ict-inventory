@@ -1,5 +1,4 @@
 import type { FormEvent } from 'react';
-import Link from 'next/link';
 import type { InventoryItem } from '@/types/inventory';
 
 interface EquipmentVerificationActionPanelProps {
@@ -62,19 +61,16 @@ export function EquipmentVerificationActionPanel({
 
   if (!isAuthorized) {
     return (
-      <section className={sectionClassName}>
-        <h2 className="text-lg font-semibold text-slate-950 dark:text-white">
-          Sign in to record a check-in
+      <section className={sectionClassName} aria-label="Verification access restricted">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+          Read-only access
+        </p>
+        <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+          Verification is restricted
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-300">
-          This equipment record is public. An authorized inventory account is required to save a physical check.
+          Check-in and verification actions are available only to authorized inventory staff.
         </p>
-        <Link
-          href="/"
-          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:focus-visible:ring-offset-slate-900"
-        >
-          Administrator sign in
-        </Link>
       </section>
     );
   }

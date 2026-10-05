@@ -410,15 +410,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const client = clientRef.current || createBrowserClient();
       clientRef.current = client;
-      const { error: oauthError } = await withDeadline(client.auth.signInWithOAuth({
+      const { data, error: oauthError } = await withDeadline(client.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: { prompt: 'select_account' },
+          skipBrowserRedirect: true,
         },
       }), 10_000);
       if (oauthError) throw oauthError;
-      googleLoadingTimerRef.current = window.setTimeout(clearGoogleLoading, 15_000);
+      if (!data.url) throw new Error('Google sign-in could not be started. Please try again.');
+      window.location.replace(data.url);
     } catch (oauthError) {
       setError(oauthError instanceof Error ? oauthError.message : 'Google sign-in could not be started.');
       clearGoogleLoading();

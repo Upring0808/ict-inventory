@@ -226,7 +226,7 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
     <section className="mx-auto w-full max-w-5xl space-y-5 pb-4 sm:space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-400">Transparency</p>
+         
           <h2 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl">Activity log</h2>
           <p className="mt-1.5 text-sm leading-5 text-zinc-600 dark:text-zinc-400">A record of equipment changes, custody transfers, and QR checks.</p>
         </div>

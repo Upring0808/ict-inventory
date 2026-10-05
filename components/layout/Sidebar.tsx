@@ -13,6 +13,8 @@ export type SidebarTab =
   | 'printers'
   | 'scanners'
   | 'issues'
+  | 'verified'
+  | 'unverified'
   | 'activity'
   | 'settings';
 
@@ -20,6 +22,8 @@ interface SidebarProps {
   currentTab: SidebarTab;
   onSelectTab: (tab: SidebarTab) => void;
   summary: InventorySummary;
+  verifiedCount: number;
+  unverifiedCount: number;
   syncStatus: SyncStatus;
   onOpenAddModal: () => void;
   onOpenSqlModal: () => void;
@@ -33,6 +37,8 @@ export function Sidebar({
   currentTab,
   onSelectTab,
   summary,
+  verifiedCount,
+  unverifiedCount,
   syncStatus,
   onOpenAddModal,
   onOpenSqlModal,
@@ -48,7 +54,7 @@ export function Sidebar({
       label: string;
       icon: React.ReactNode;
       count?: number;
-      accent?: 'default' | 'red';
+      accent?: 'default' | 'red' | 'amber';
     }[];
   }[] = [
       {
@@ -131,6 +137,27 @@ export function Sidebar({
             icon: (
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            ),
+          },
+          {
+            id: 'verified',
+            label: 'Verified',
+            count: verifiedCount,
+            icon: (
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m5 12 4 4L19 6M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" />
+              </svg>
+            ),
+          },
+          {
+            id: 'unverified',
+            label: 'Not Verified',
+            count: unverifiedCount,
+            accent: 'amber',
+            icon: (
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M10.3 3.9 2.7 17.5A2 2 0 0 0 4.4 20.5h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
               </svg>
             ),
           },
@@ -251,9 +278,12 @@ export function Sidebar({
                 {group.items.map((item) => {
                   const isActive = currentTab === item.id;
                   const isRed = item.accent === 'red';
+                  const isAmber = item.accent === 'amber' && (item.count ?? 0) > 0;
                   return (
                     <button
                       key={item.id}
+                      type="button"
+                      aria-current={isActive ? 'page' : undefined}
                       onClick={() => {
                         onSelectTab(item.id);
                         if (isMobileOpen) onCloseMobile();
@@ -262,6 +292,8 @@ export function Sidebar({
                         ? 'text-white shadow-sm'
                         : isRed
                           ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30'
+                          : isAmber
+                            ? 'text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30'
                           : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100'
                         }`}
                       style={
@@ -283,6 +315,8 @@ export function Sidebar({
                             ? 'bg-white/20 text-white'
                             : isRed && item.count > 0
                               ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                              : isAmber
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                               : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
                             }`}
                         >

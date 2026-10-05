@@ -1,16 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function CompletingSignInPage() {
   const { status } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
-    if (status !== 'loading') router.replace('/');
-  }, [router, status]);
+    if (status !== 'loading') window.location.replace('/');
+  }, [status]);
 
   return (
     <main className="grid min-h-screen place-items-center bg-zinc-50 px-5 dark:bg-zinc-950">

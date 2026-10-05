@@ -111,7 +111,7 @@ export function LoginScreen({
           <div className={styles.photoShade} aria-hidden="true" />
           <p className={styles.photoTopline}>PENRO Batanes</p>
           <div className={styles.photoBody}>
-            <p className={styles.photoEyebrow}>ICT asset stewardship</p>
+        
             <p className={styles.photoHeading}>A clearer view of every asset.</p>
             <p className={styles.photoDescription}>Track equipment with confidence and care for the resources behind every day of work.</p>
             <span className={styles.photoRule} aria-hidden="true" />
@@ -144,7 +144,7 @@ export function LoginScreen({
 
             {view === 'sign-in' ? (
               <div className={styles.content}>
-                <p className={styles.eyebrow}>Authorized workspace</p>
+                
                 <h1 className={styles.heading}>Welcome back.</h1>
                 <p className={styles.subheading}>Sign in to manage ICT equipment and keep every record in view.</p>
 

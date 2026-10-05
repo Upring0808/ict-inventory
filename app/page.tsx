@@ -30,6 +30,10 @@ import { SqlSchemaModal } from '@/components/inventory/SqlSchemaModal';
 import { DeleteConfirmModal } from '@/components/inventory/DeleteConfirmModal';
 import { PrintReport } from '@/components/inventory/PrintReport';
 
+function isEquipmentVerified(item: InventoryItem): boolean {
+  return Boolean(item.lastVerifiedAt);
+}
+
 export default function InventoryDashboard() {
   return (
     <AuthGate>
@@ -154,6 +158,11 @@ function InventoryDashboardContent() {
 
   // Compute live summary
   const summary = useMemo(() => calculateSummary(items), [items]);
+  const verifiedCount = useMemo(
+    () => items.filter(isEquipmentVerified).length,
+    [items]
+  );
+  const unverifiedCount = items.length - verifiedCount;
 
   const reportScope = useMemo(() => {
     const details: string[] = [];
@@ -223,6 +232,8 @@ function InventoryDashboardContent() {
       setFilters((prev) => ({ ...prev, type: 'Scanners', statusCategory: '', year: '' }));
     } else if (tab === 'issues') {
       setFilters((prev) => ({ ...prev, type: '', statusCategory: 'Needs Attention', year: '' }));
+    } else if (tab === 'verified' || tab === 'unverified') {
+      setFilters((prev) => ({ ...prev, type: '', statusCategory: '', year: '' }));
     }
   };
 
@@ -231,6 +242,9 @@ function InventoryDashboardContent() {
     const query = filters.searchQuery.trim().toLowerCase();
 
     return items.filter((item) => {
+      if (currentTab === 'verified' && !isEquipmentVerified(item)) return false;
+      if (currentTab === 'unverified' && isEquipmentVerified(item)) return false;
+
       // Search match — covers all key identifiable fields
       if (query) {
         const searchFields = [
@@ -313,7 +327,7 @@ function InventoryDashboardContent() {
 
       return true;
     });
-  }, [items, filters]);
+  }, [items, filters, currentTab]);
 
   // CRUD Handlers
   const handleSaveItem = async (
@@ -424,6 +438,8 @@ function InventoryDashboardContent() {
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
         summary={summary}
+        verifiedCount={verifiedCount}
+        unverifiedCount={unverifiedCount}
         syncStatus={syncStatus}
         onOpenAddModal={() => {
           setItemToEdit(null);
@@ -521,9 +537,15 @@ function InventoryDashboardContent() {
                   {currentTab === 'printers' && 'Printers'}
                   {currentTab === 'scanners' && 'Scanners'}
                   {currentTab === 'issues' && 'Needs Attention'}
+                  {currentTab === 'verified' && 'Verified Equipment'}
+                  {currentTab === 'unverified' && 'Not Yet Verified'}
                 </h2>
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                  {filteredItems.length} of {items.length} units
+                  {currentTab === 'verified'
+                    ? `${filteredItems.length} of ${verifiedCount} verified units`
+                    : currentTab === 'unverified'
+                      ? `${filteredItems.length} of ${unverifiedCount} units still need verification`
+                      : `${filteredItems.length} of ${items.length} units`}
                 </p>
               </div>}
 
