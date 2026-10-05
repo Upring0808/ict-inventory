@@ -246,8 +246,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const pageUrl = new URL(window.location.href);
-    if (pageUrl.searchParams.get('auth_error') === 'google') {
-      const message = 'Google sign-in could not be completed. Please try again.';
+    const callbackError = pageUrl.searchParams.get('auth_error');
+    if (callbackError === 'google' || callbackError === 'browser') {
+      const message = callbackError === 'browser'
+        ? 'Google sign-in lost its browser session. Open the inventory in the same Chrome tab and try again.'
+        : 'Google sign-in could not be completed. Please try again.';
       pendingLoginErrorRef.current = message;
       pageUrl.searchParams.delete('auth_error');
       window.history.replaceState(null, '', `${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);

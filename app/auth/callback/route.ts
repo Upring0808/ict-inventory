@@ -1,12 +1,11 @@
 import { createServerClient as createSupabaseServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-function redirectAfterCallback(request: NextRequest, success: boolean) {
+function redirectAfterCallback(request: NextRequest, success: boolean, errorKind: 'google' | 'browser' = 'google') {
   const destination = new URL(success ? '/auth/completing' : '/', request.url);
-  if (!success) destination.searchParams.set('auth_error', 'google');
+  if (!success) destination.searchParams.set('auth_error', errorKind);
 
   const response = NextResponse.redirect(destination);
   response.headers.set('Cache-Control', 'no-store');
@@ -24,28 +23,31 @@ export async function GET(request: NextRequest) {
   if (!supabaseUrl || !supabaseKey) return redirectAfterCallback(request, false);
 
   try {
-    const cookieStore = await cookies();
+    const response = redirectAfterCallback(request, true);
     const supabase = createSupabaseServerClient(supabaseUrl, supabaseKey, {
       cookies: {
-        getAll: () => cookieStore.getAll(),
+        getAll: () => request.cookies.getAll(),
         setAll: (cookiesToSet) => {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            response.cookies.set(name, value, options);
+          });
         },
       },
     });
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      console.error('Google OAuth code exchange failed:', error.message);
-      return redirectAfterCallback(request, false);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error || !data.session) {
+      console.error('Google OAuth code exchange failed:', error?.message || 'No session was returned.');
+      return redirectAfterCallback(request, false, error?.name === 'AuthPKCECodeVerifierMissingError' ? 'browser' : 'google');
     }
 
-    return redirectAfterCallback(request, true);
+    return response;
   } catch (callbackError) {
     console.error(
       'Google OAuth callback could not be completed:',
       callbackError instanceof Error ? callbackError.message : 'Unknown error',
     );
-    return redirectAfterCallback(request, false);
+    return redirectAfterCallback(request, false, callbackError instanceof Error && callbackError.name === 'AuthPKCECodeVerifierMissingError' ? 'browser' : 'google');
   }
 }

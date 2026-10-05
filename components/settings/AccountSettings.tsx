@@ -24,6 +24,7 @@ export function AccountSettings() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const loadAccounts = useCallback(async () => {
     setIsLoading(true);
@@ -50,6 +51,7 @@ export function AccountSettings() {
     setBusyId('new');
     setError(null);
     setSuccess(null);
+    setWarning(null);
     const form = event.currentTarget;
     const data = new FormData(form);
     const username = String(data.get('username') || '').trim();
@@ -70,8 +72,13 @@ export function AccountSettings() {
         }),
       });
       if (!response.ok) throw new Error(await readApiError(response, 'The account could not be created.'));
+      const result = await response.json() as { invitationSent?: boolean; warning?: string };
       form.reset();
-      setSuccess('Authorized account created.');
+      if (result.invitationSent) {
+        setSuccess('Authorized account created. An invitation with the temporary password and sign-in link was emailed.');
+      } else {
+        setWarning(result.warning || 'The account was created, but its invitation email could not be delivered.');
+      }
       await loadAccounts();
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'The account could not be created.');
@@ -86,6 +93,7 @@ export function AccountSettings() {
     setBusyId(account.id);
     setError(null);
     setSuccess(null);
+    setWarning(null);
     const data = new FormData(event.currentTarget);
     const email = String(data.get('email') || '').trim();
     const username = String(data.get('username') || '').trim();
@@ -161,6 +169,7 @@ export function AccountSettings() {
     setBusyId(account.id);
     setError(null);
     setSuccess(null);
+    setWarning(null);
     try {
       const response = await authorizedApiFetch('/api/admin/accounts', {
         method: 'DELETE',
@@ -199,9 +208,9 @@ export function AccountSettings() {
         </div>
       </div>
 
-      {(error || success) && (
-        <div role={error ? 'alert' : 'status'} className={`rounded-xl border px-4 py-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200' : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'}`}>
-          {error || success}
+      {(error || warning || success) && (
+        <div role={error || warning ? 'alert' : 'status'} className={`rounded-xl border px-4 py-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200' : warning ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200' : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'}`}>
+          {error || warning || success}
         </div>
       )}
 
@@ -263,7 +272,7 @@ export function AccountSettings() {
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
           <div className="mb-4">
             <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Add an authorized user</h3>
-            <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Create the second account manually. Public registration is disabled.</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Create the second account and email its invitation. Public registration is disabled.</p>
           </div>
           {accounts.length >= 2 ? (
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">The two authorized account slots are filled. Remove an account before adding another.</div>
@@ -272,8 +281,8 @@ export function AccountSettings() {
               <label className={labelClassName}>Name<input name="name" required minLength={2} maxLength={100} className={inputClassName} /></label>
               <label className={labelClassName}>Email address<input name="email" type="email" autoComplete="email" required className={inputClassName} /></label>
               <label className={labelClassName}>Username <span className="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span><input name="username" autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" className={inputClassName} /></label>
-              <label className={labelClassName}>Initial password<input name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} className={inputClassName} /><span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">At least 12 characters.</span></label>
-              <button type="submit" disabled={busyId === 'new'} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:from-green-700 hover:to-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:opacity-60">{busyId === 'new' ? 'Creating account…' : 'Create authorized account'}</button>
+              <label className={labelClassName}>Temporary password<input name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} className={inputClassName} /><span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">At least 12 characters. This password will be included in the invitation email; the recipient can change it after signing in.</span></label>
+              <button type="submit" disabled={busyId === 'new'} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:from-green-700 hover:to-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:opacity-60">{busyId === 'new' ? 'Creating and sending…' : 'Create account and send invitation'}</button>
             </form>
           )}
         </section>

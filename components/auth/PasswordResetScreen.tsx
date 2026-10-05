@@ -7,17 +7,85 @@ import { authorizedApiFetch, fetchAuthProfile, readApiError } from '@/lib/auth/c
 import { createBrowserClient } from '@/lib/supabase/client';
 
 const recoveryCodeExchanges = new Map<string, Promise<Session>>();
+const INVALID_RECOVERY_LINK = 'This recovery link is incomplete or expired. Request a new password reset email.';
 
 function exchangeRecoveryCode(code: string): Promise<Session> {
   const pending = recoveryCodeExchanges.get(code);
   if (pending) return pending;
 
-  const exchange = createBrowserClient().auth.exchangeCodeForSession(code).then(({ data, error }) => {
-    if (error || !data.session) throw error || new Error('The recovery link did not return a valid session.');
+  const client = createBrowserClient();
+  let receivedRecoveryEvent = false;
+  const { data: { subscription } } = client.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') receivedRecoveryEvent = true;
+  });
+  const exchange = client.auth.exchangeCodeForSession(code).then(async ({ data, error }) => {
+    if (error || !data.session) throw error || new Error(INVALID_RECOVERY_LINK);
+
+    if (!receivedRecoveryEvent) {
+      await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
+      throw new Error(INVALID_RECOVERY_LINK);
+    }
+
     return data.session;
   });
-  recoveryCodeExchanges.set(code, exchange);
-  return exchange;
+  const pendingExchange = exchange.finally(() => {
+    subscription.unsubscribe();
+    if (recoveryCodeExchanges.get(code) === pendingExchange) recoveryCodeExchanges.delete(code);
+  });
+  recoveryCodeExchanges.set(code, pendingExchange);
+  return pendingExchange;
+}
+
+function removeRecoveryCredentials(url: URL) {
+  const cleanedUrl = new URL(url.href);
+  cleanedUrl.searchParams.delete('code');
+  cleanedUrl.searchParams.delete('token_hash');
+  cleanedUrl.searchParams.delete('type');
+  cleanedUrl.searchParams.delete('error');
+  cleanedUrl.searchParams.delete('error_code');
+  cleanedUrl.searchParams.delete('error_description');
+  cleanedUrl.hash = '';
+  window.history.replaceState(null, '', `${cleanedUrl.pathname}${cleanedUrl.search}`);
+}
+
+async function readRecoverySession(): Promise<Session> {
+  const client = createBrowserClient();
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get('code');
+
+  if (code) {
+    removeRecoveryCredentials(url);
+    return exchangeRecoveryCode(code);
+  }
+
+  const tokenHash = url.searchParams.get('token_hash');
+  if (tokenHash) {
+    const isRecovery = url.searchParams.get('type') === 'recovery';
+    removeRecoveryCredentials(url);
+    if (!isRecovery) throw new Error(INVALID_RECOVERY_LINK);
+
+    const { data, error } = await client.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+    if (error || !data.session) throw error || new Error(INVALID_RECOVERY_LINK);
+    return data.session;
+  }
+
+  const fragment = new URLSearchParams(url.hash.slice(1));
+  const accessToken = fragment.get('access_token');
+  const refreshToken = fragment.get('refresh_token');
+  if (accessToken || refreshToken) {
+    const isRecovery = fragment.get('type') === 'recovery';
+    removeRecoveryCredentials(url);
+    if (!isRecovery || !accessToken || !refreshToken) throw new Error(INVALID_RECOVERY_LINK);
+
+    const { data, error } = await client.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (error || !data.session) throw error || new Error(INVALID_RECOVERY_LINK);
+    return data.session;
+  }
+
+  throw new Error(INVALID_RECOVERY_LINK);
 }
 
 type ScreenState = 'checking' | 'ready' | 'saving' | 'done' | 'error';
@@ -35,33 +103,24 @@ export function PasswordResetScreen() {
     const validateRecoverySession = async () => {
       try {
         const client = createBrowserClient();
-        const code = new URLSearchParams(window.location.search).get('code');
-        let session: Session | null;
-
-        if (code) {
-          session = await exchangeRecoveryCode(code);
-          const currentUrl = new URL(window.location.href);
-          currentUrl.searchParams.delete('code');
-          window.history.replaceState({}, '', currentUrl);
-        } else {
-          const { data, error: sessionError } = await client.auth.getSession();
-          if (sessionError) throw sessionError;
-          session = data.session;
-        }
-
-        if (!session) throw new Error('This recovery link has expired. Request a new password reset email.');
+        const session = await readRecoverySession();
+        if (!active) return;
 
         const response = await fetchAuthProfile(session.access_token);
+        if (!active) return;
         if (!response.ok) {
           const message = await readApiError(response, 'This recovery link is not for an authorized inventory account.');
-          await client.auth.signOut().catch(() => undefined);
+          await client.auth.signOut({ scope: 'local' }).catch(() => undefined);
           throw new Error(message);
         }
 
         if (active) setScreenState('ready');
       } catch (recoveryError) {
         if (!active) return;
-        setError(recoveryError instanceof Error ? recoveryError.message : 'The recovery link could not be verified.');
+        const message = recoveryError instanceof Error && recoveryError.name === 'AuthPKCECodeVerifierMissingError'
+          ? 'Open this reset link in the same browser where you requested it, or request a new password reset email there.'
+          : recoveryError instanceof Error ? recoveryError.message : 'The recovery link could not be verified.';
+        setError(message);
         setScreenState('error');
       }
     };
@@ -96,7 +155,7 @@ export function PasswordResetScreen() {
       if (!response.ok) throw new Error(await readApiError(response, 'The password could not be updated.'));
       const result = await response.json() as { warning?: string };
       setWarning(result.warning || null);
-      await createBrowserClient().auth.signOut().catch(() => undefined);
+      await createBrowserClient().auth.signOut({ scope: 'local' }).catch(() => undefined);
       setScreenState('done');
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'The password could not be updated.');

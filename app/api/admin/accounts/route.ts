@@ -8,6 +8,7 @@ import {
   validEmail,
   validPassword,
 } from '@/lib/auth/server';
+import { getInvitationEmailConfig, sendAccountInvitation, type InvitationEmailConfig } from '@/lib/email/accountInvitation';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,6 +103,16 @@ export async function POST(request: Request) {
       if (usernameInUse) return Response.json({ error: 'That username is already in use.' }, { status: 409 });
     }
 
+    let invitationConfig: InvitationEmailConfig;
+    try {
+      invitationConfig = getInvitationEmailConfig();
+    } catch (configError) {
+      return Response.json(
+        { error: configError instanceof Error ? configError.message : 'Invitation email is not configured.' },
+        { status: 503 }
+      );
+    }
+
     const { user: authUser, created: createdAuthUser } = await createOrUpdateAuthUser(email, password, name);
     const { error } = await admin.rpc('manage_authorized_account', {
       p_operation: 'create',
@@ -125,7 +136,19 @@ export async function POST(request: Request) {
       );
     }
 
-    return Response.json({ ok: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
+    try {
+      await sendAccountInvitation(invitationConfig, { name, email, username, temporaryPassword: password });
+      return Response.json({ ok: true, invitationSent: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
+    } catch {
+      return Response.json(
+        {
+          ok: true,
+          invitationSent: false,
+          warning: 'The account was created, but its invitation email could not be delivered. Check the mail service before sharing the sign-in details securely.',
+        },
+        { status: 201, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
   } catch {
     return Response.json({ error: 'The authorized account could not be created.' }, { status: 503 });
   }

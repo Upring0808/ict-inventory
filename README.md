@@ -27,7 +27,10 @@ Run the full script again when updating an existing installation. It converts le
 
 - Enable the Email provider and Google provider.
 - Turn **off** Supabase's **Allow new users to sign up** setting. The application creates accounts through its server-side admin API, so public sign-up is not needed.
-- Set the Supabase site URL and add your local and deployed `/auth/callback` URLs to the allowed redirect URLs.
+- Set the Supabase site URL and add your local and deployed `/auth/callback` and `/auth/reset-password` URLs to the allowed redirect URLs. Supabase Auth only redirects to URLs on this allowlist.
+- Make sure the password recovery email template uses the redirect URL passed by the app (`.RedirectTo`) instead of hardcoding the site URL.
+- Configure custom SMTP in Supabase for reliable password reset email delivery in production; Supabase's built-in email service is rate-limited and intended for testing.
+- Configure the application's invitation SMTP settings separately. The app sends account invitations itself; Supabase sends password recovery messages.
 - Configure the Google OAuth client in Supabase Auth and set Google's authorized redirect URI to the Supabase callback shown in that provider's settings.
 - Google identities automatically link to an existing Auth user with the same verified email. Create that email as an authorized account in Settings first.
 
@@ -40,15 +43,27 @@ NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SECRET_KEY=your-server-only-secret-key
 INVENTORY_BOOTSTRAP_SECRET=your-random-secret-of-at-least-32-characters
+INVENTORY_SITE_URL=https://your-deployed-inventory-domain
+SMTP_HOST=your-smtp-server
+SMTP_PORT=587
+SMTP_USER=your-smtp-username
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM_EMAIL=inventory@your-domain
 ```
 
 `SUPABASE_SECRET_KEY` may instead be named `SUPABASE_SERVICE_ROLE_KEY`. Keep it server-only and never prefix it with `NEXT_PUBLIC_`. `INVENTORY_BOOTSTRAP_SECRET` is used only to create the first account; once the account exists, `/api/setup` is locked.
+
+Use an HTTPS `INVENTORY_SITE_URL` for deployed invitations (`http://localhost` is supported locally). Configure a sender address approved by your SMTP provider. Account creation checks these settings before saving an account. The server reports separately if the account was saved but the SMTP server did not accept its invitation.
 
 ### 4. Create the two user accounts
 
 Open `/setup` and create the first named account using the bootstrap secret and a password of at least 12 characters. Sign in, open **Settings**, and create the second account. Both accounts have the same permissions, and no public registration route is provided.
 
+Each new account receives a branded email with the account email, optional username, the temporary password entered during creation, and a sign-in link. The link opens the normal login page with the email filled in. Ask the recipient to change the password in Settings after signing in. Because the invitation contains a password, use a unique temporary password and a trusted SMTP service; do not reuse an existing personal password.
+
 The login page accepts each account's email or optional username and password. Google sign-in is accepted only when the verified email and Auth identity match an authorized account.
+
+For Google sign-in on Android Chrome, begin and finish the flow in the same Chrome tab. Add the deployed origin's exact `/auth/callback` URL to Supabase Auth redirect URLs, and use the same HTTPS host when opening the app. The Google provider's redirect URI in Google Cloud is the Supabase callback shown in Supabase, not this app route.
 
 ### 5. Deploy
 

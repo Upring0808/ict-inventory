@@ -1,8 +1,9 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { AppBrand } from '@/components/branding/AppBrand';
+import { withDeadline } from '@/lib/auth/client';
 import { createBrowserClient } from '@/lib/supabase/client';
 import styles from './LoginScreen.module.css';
 
@@ -39,6 +40,18 @@ export function LoginScreen({
   const activeLoadingMethod = loadingMethod ?? (isLoading ? 'password' : null);
   const isBusy = isLoading || activeLoadingMethod !== null;
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const url = new URL(window.location.href);
+      const invitedEmail = url.searchParams.get('login_email');
+      if (!invitedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invitedEmail)) return;
+      setEmailOrUsername(invitedEmail);
+      url.searchParams.delete('login_email');
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -57,12 +70,15 @@ export function LoginScreen({
     setForgotNotice(null);
 
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get('forgotEmail') ?? '').trim();
+    const email = String(formData.get('forgotEmail') ?? '').trim().toLowerCase();
 
     try {
-      const { error: resetError } = await createBrowserClient().auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      });
+      const { error: resetError } = await withDeadline(
+        createBrowserClient().auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/reset-password`,
+        }),
+        12_000
+      );
       if (resetError) throw resetError;
       setForgotNotice('If an account is registered with this email, password reset instructions will be sent.');
     } catch {
@@ -238,6 +254,7 @@ export function LoginScreen({
                       autoComplete="email"
                       autoCapitalize="none"
                       spellCheck={false}
+                      maxLength={254}
                       required
                       disabled={isForgotSubmitting}
                       value={forgotEmail}

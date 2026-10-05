@@ -8,6 +8,7 @@ import {
   validPassword,
   deleteAuthUser,
 } from '@/lib/auth/server';
+import { getInvitationEmailConfig, sendAccountInvitation, type InvitationEmailConfig } from '@/lib/email/accountInvitation';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,16 @@ export async function POST(request: Request) {
     if (countError) return Response.json({ error: 'The inventory database is not ready. Run the updated Supabase schema first.' }, { status: 503 });
     if ((count ?? 0) > 0) return Response.json({ error: 'Initial setup has already been completed.' }, { status: 409 });
 
+    let invitationConfig: InvitationEmailConfig;
+    try {
+      invitationConfig = getInvitationEmailConfig();
+    } catch (configError) {
+      return Response.json(
+        { error: configError instanceof Error ? configError.message : 'Invitation email is not configured.' },
+        { status: 503 }
+      );
+    }
+
     const { user: authUser, created: createdAuthUser } = await createOrUpdateAuthUser(email, password, name);
     const { error: accountError } = await admin.rpc('manage_authorized_account', {
       p_operation: 'create',
@@ -80,7 +91,19 @@ export async function POST(request: Request) {
       return Response.json({ error: 'The initial account could not be saved. Check the database schema and try again.' }, { status: 400 });
     }
 
-    return Response.json({ ok: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
+    try {
+      await sendAccountInvitation(invitationConfig, { name, email, username, temporaryPassword: password });
+      return Response.json({ ok: true, invitationSent: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
+    } catch {
+      return Response.json(
+        {
+          ok: true,
+          invitationSent: false,
+          warning: 'The first account was created, but its invitation email could not be delivered. Check the mail service before sharing the sign-in details securely.',
+        },
+        { status: 201, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
   } catch {
     return Response.json({ error: 'Initial setup could not be completed.' }, { status: 503 });
   }
