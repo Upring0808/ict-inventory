@@ -1,19 +1,9 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import type { ReactNode } from 'react';
 
 type ThemeMode = 'system' | 'light' | 'dark';
-
-interface ViewTransitionHandle {
-  finished: Promise<void>;
-  skipTransition: () => void;
-}
-
-type DocumentWithViewTransitions = Document & {
-  startViewTransition?: (updateCallback: () => void) => ViewTransitionHandle;
-};
 
 interface ThemeContextValue {
   isDark: boolean;
@@ -37,68 +27,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isDark, setIsDark] = useState(false);
   const themeModeRef = useRef<ThemeMode>('system');
   const targetDarkRef = useRef(false);
-  const activeTransition = useRef<ViewTransitionHandle | null>(null);
-  const transitionCleanupFrame = useRef<number | null>(null);
-  const transitionGeneration = useRef(0);
 
   const applyTheme = useCallback((nextMode: ThemeMode, nextDark: boolean) => {
-    const root = document.documentElement;
-    const generation = ++transitionGeneration.current;
     themeModeRef.current = nextMode;
     targetDarkRef.current = nextDark;
-
-    if (transitionCleanupFrame.current !== null) {
-      window.cancelAnimationFrame(transitionCleanupFrame.current);
-      transitionCleanupFrame.current = null;
+    document.documentElement.classList.toggle('dark', nextDark);
+    setThemeMode(nextMode);
+    setIsDark(nextDark);
+    try {
+      window.localStorage.setItem('theme', nextMode);
+    } catch {
+      // The in-memory preference still works when browser storage is unavailable.
     }
-    activeTransition.current?.skipTransition();
-    activeTransition.current = null;
-
-    const updateTheme = () => {
-      if (generation !== transitionGeneration.current) return;
-      root.classList.add('theme-transitioning');
-      flushSync(() => {
-        root.classList.toggle('dark', nextDark);
-        setThemeMode(nextMode);
-        setIsDark(nextDark);
-      });
-      try {
-        window.localStorage.setItem('theme', nextMode);
-      } catch {
-        // The in-memory preference still works when browser storage is unavailable.
-      }
-    };
-
-    const finishTransition = () => {
-      if (generation !== transitionGeneration.current) return;
-      root.classList.remove('theme-transitioning');
-      activeTransition.current = null;
-      transitionCleanupFrame.current = null;
-    };
-
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const viewTransitionDocument = document as DocumentWithViewTransitions;
-    if (!prefersReducedMotion && typeof viewTransitionDocument.startViewTransition === 'function') {
-      try {
-        const transition = viewTransitionDocument.startViewTransition(updateTheme);
-        activeTransition.current = transition;
-        void transition.finished.then(finishTransition, finishTransition);
-        return;
-      } catch {
-        // Fall through to an immediate, transition-suppressed update if the API is unavailable.
-      }
-    }
-
-    updateTheme();
-    if (prefersReducedMotion) {
-      finishTransition();
-      return;
-    }
-
-    // Let one frame render with component transitions disabled, then restore them.
-    transitionCleanupFrame.current = window.requestAnimationFrame(() => {
-      transitionCleanupFrame.current = window.requestAnimationFrame(finishTransition);
-    });
   }, []);
 
   useEffect(() => {
@@ -108,9 +48,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const initialDark = initialMode === 'system' ? media.matches : initialMode === 'dark';
     themeModeRef.current = initialMode;
     targetDarkRef.current = initialDark;
-    setThemeMode(initialMode);
-    setIsDark(initialDark);
     root.classList.toggle('dark', initialDark);
+    const initialStateTimer = window.setTimeout(() => {
+      if (themeModeRef.current !== initialMode || targetDarkRef.current !== initialDark) return;
+      setThemeMode(initialMode);
+      setIsDark(initialDark);
+    }, 0);
 
     const followSystemPreference = () => {
       if (themeModeRef.current !== 'system') return;
@@ -119,15 +62,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     media.addEventListener('change', followSystemPreference);
     return () => {
+      window.clearTimeout(initialStateTimer);
       media.removeEventListener('change', followSystemPreference);
-      transitionGeneration.current += 1;
-      if (transitionCleanupFrame.current !== null) {
-        window.cancelAnimationFrame(transitionCleanupFrame.current);
-        transitionCleanupFrame.current = null;
-      }
-      activeTransition.current?.skipTransition();
-      activeTransition.current = null;
-      root.classList.remove('theme-transitioning');
     };
   }, [applyTheme]);
 

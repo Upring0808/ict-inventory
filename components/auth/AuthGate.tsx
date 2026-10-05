@@ -7,7 +7,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
 
-  if (auth.status === 'loading') {
+  if (auth.status === 'loading' && auth.hasSession) {
     return (
       <main className="grid min-h-screen place-items-center bg-zinc-50 dark:bg-zinc-950">
         <div className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-sm font-medium text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">

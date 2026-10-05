@@ -94,6 +94,7 @@ export function LoginScreen({
           alt=""
           width={680}
           height={680}
+          loading="eager"
           className={styles.canvasMark}
         />
       </div>
@@ -126,6 +127,7 @@ export function LoginScreen({
             alt=""
             width={440}
             height={440}
+            loading="eager"
             className={styles.watermark}
             aria-hidden="true"
           />

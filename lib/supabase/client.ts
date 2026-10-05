@@ -1,4 +1,5 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createBrowserClient as createSupabaseBrowserClient } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 let client: SupabaseClient | undefined;
 
@@ -24,10 +25,10 @@ export function createBrowserClient(): SupabaseClient {
     );
   }
 
-  client = createClient(supabaseUrl, supabaseKey, {
+  client = createSupabaseBrowserClient(supabaseUrl, supabaseKey, {
     auth: {
-      // OAuth returns a one-time authorization code to /auth/callback, where
-      // the app explicitly exchanges it and validates the allowlisted account.
+      // The server callback exchanges OAuth codes using the cookie-backed
+      // PKCE verifier shared by this client and the callback route.
       flowType: 'pkce',
       detectSessionInUrl: false,
       persistSession: true,

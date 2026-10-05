@@ -79,29 +79,6 @@ html.dark .dark\:text-zinc-400 { color: #bdc1c6 !important; }
 html.dark .dark\:text-zinc-500 { color: #9aa0a6 !important; }
 html.dark .card { background: #292a2d; border-color: #3c4043; }
 
-/* Theme changes cross-fade one browser-composited viewport snapshot. */
-html.theme-transitioning,
-html.theme-transitioning *,
-html.theme-transitioning *::before,
-html.theme-transitioning *::after {
-  transition: none !important;
-}
-
-::view-transition-group(root),
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 220ms;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(root),
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation: none !important;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
@@ -280,6 +257,518 @@ table tbody tr {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 1ms !important;
+  }
+
+}
+
+/* A dedicated paper surface is rendered only for the authenticated print action. */
+.print-report {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0 0 3mm;
+
+    @bottom-right {
+      content: counter(page) "/" counter(pages);
+      padding-right: 8mm;
+      color: #718388;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 6pt;
+      line-height: 1;
+    }
+  }
+
+  html,
+  body {
+    width: 100%;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #172b31 !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .dashboard-shell {
+    display: none !important;
+  }
+
+  .print-report {
+    display: block !important;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8mm 8mm 12mm;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    overflow: visible;
+    background: #fff !important;
+    color: #172b31 !important;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 8pt;
+    line-height: 1.3;
+  }
+
+  .print-report *,
+  .print-report *::before,
+  .print-report *::after {
+    box-sizing: border-box;
+    color-adjust: exact;
+  }
+
+  .report-header {
+    margin-bottom: 3mm;
+  }
+
+  .report-brand {
+    display: flex;
+    align-items: center;
+    gap: 2mm;
+    min-height: 11mm;
+  }
+
+  .report-brand__agency {
+    display: block;
+    color: #426068 !important;
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: .13em;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+
+  .report-brand__name {
+    display: block;
+    color: #123640 !important;
+    font-size: 12pt;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .report-brand__descriptor {
+    color: #46725d !important;
+    font-size: 9pt;
+    font-weight: 700;
+  }
+
+  .report-brand__office {
+    margin: 0 0 0 2mm;
+    padding-left: 3mm;
+    border-left: 1px solid #c7d3d4;
+    color: #64777c !important;
+    font-size: 7pt;
+  }
+
+  .report-date {
+    display: flex;
+    justify-content: space-between;
+    margin: 2mm 0;
+    color: #52676c !important;
+    font-size: 7pt;
+  }
+
+  .report-date strong {
+    color: #123640 !important;
+    font-weight: 700;
+  }
+
+  .report-title-band {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8mm;
+    padding: 4mm 5mm 3.5mm;
+    background: #123640 !important;
+    color: #fff !important;
+  }
+
+  .report-title-band > div {
+    min-width: 0;
+  }
+
+  .report-eyebrow,
+  .report-title-band h1,
+  .report-scope {
+    margin: 0;
+    color: #fff !important;
+  }
+
+  .report-eyebrow {
+    margin-bottom: 1mm;
+    color: #b7d7c7 !important;
+    font-size: 6.5pt;
+    font-weight: 800;
+    letter-spacing: .15em;
+  }
+
+  .report-title-band h1 {
+    font-size: 17pt;
+    font-weight: 750;
+    letter-spacing: -.025em;
+    line-height: 1.08;
+  }
+
+  .report-scope {
+    max-width: 49%;
+    color: #e4eeee !important;
+    font-size: 7pt;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .report-scope strong {
+    display: block;
+    margin-bottom: 1mm;
+    color: #b7d7c7 !important;
+    font-size: 6pt;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+
+  .report-accent-rule {
+    height: 1.2mm;
+    background: #38a169 !important;
+  }
+
+  .report-section {
+    margin: 0;
+  }
+
+  .report-section-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 4mm;
+    margin-bottom: 2mm;
+  }
+
+  .report-section-heading h2 {
+    margin: 0;
+    color: #173b43 !important;
+    font-size: 10pt;
+    font-weight: 750;
+    letter-spacing: -.015em;
+  }
+
+  .report-kicker {
+    margin: 0 0 .6mm;
+    color: #58766f !important;
+    font-size: 6pt;
+    font-weight: 800;
+    letter-spacing: .13em;
+  }
+
+  .report-overview {
+    padding: 3mm 0 3mm;
+    border-bottom: 1px solid #cdd9d8;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-total {
+    display: flex;
+    align-items: baseline;
+    gap: 2mm;
+    margin: 0;
+    color: #567077 !important;
+    font-size: 7pt;
+  }
+
+  .report-total strong {
+    color: #123640 !important;
+    font-size: 17pt;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .report-type-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    border-top: 1px solid #e0e8e7;
+    border-bottom: 1px solid #e0e8e7;
+  }
+
+  .report-type-stat {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2mm;
+    min-height: 10mm;
+    padding: 1.5mm 2.5mm;
+    border-right: 1px solid #e0e8e7;
+  }
+
+  .report-type-stat:first-child {
+    padding-left: 0;
+  }
+
+  .report-type-stat:last-child {
+    border-right: 0;
+  }
+
+  .report-type-stat span {
+    color: #566c72 !important;
+    font-size: 7pt;
+  }
+
+  .report-type-stat strong {
+    color: #123640 !important;
+    font-size: 13pt;
+    font-weight: 800;
+  }
+
+  .report-type-stat--aged strong {
+    color: #9a5b18 !important;
+  }
+
+  .report-type-stat--aged {
+    display: block;
+  }
+
+  .report-type-stat__values {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1mm;
+    margin-top: .5mm;
+  }
+
+  .report-type-stat__values small {
+    color: #8a632d !important;
+    font-size: 6pt;
+    white-space: nowrap;
+  }
+
+  .report-type-stat--rate {
+    display: block;
+    background: #f2f7f4 !important;
+  }
+
+  .report-type-stat--rate strong {
+    display: block;
+    margin-top: .5mm;
+    color: #23734d !important;
+  }
+
+  .report-detail-grid {
+    display: grid;
+    grid-template-columns: .95fr 1.35fr;
+    gap: 7mm;
+    padding: 3mm 0;
+    border-bottom: 1px solid #cdd9d8;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-section-heading--compact {
+    margin-bottom: 1.5mm;
+  }
+
+  .report-condition-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1mm 4mm;
+    margin: 0;
+  }
+
+  .report-condition-list > div,
+  .report-location-list > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2mm;
+    min-width: 0;
+    padding: 1mm 0;
+    border-bottom: 1px solid #edf1f0;
+  }
+
+  .report-condition-list dt {
+    display: grid;
+    grid-template-columns: 2mm 1fr;
+    column-gap: 1.5mm;
+    align-items: center;
+    min-width: 0;
+    color: #3e555b !important;
+    font-size: 7pt;
+  }
+
+  .report-condition-list small {
+    grid-column: 2;
+    color: #73858a !important;
+    font-size: 5.7pt;
+  }
+
+  .report-condition-list dd {
+    margin: 0;
+    color: #123640 !important;
+    font-size: 9pt;
+    font-weight: 750;
+  }
+
+  .report-dot {
+    width: 1.7mm;
+    height: 1.7mm;
+    border-radius: 50%;
+    background: #657b80 !important;
+  }
+
+  .report-dot--serviceable { background: #238451 !important; }
+  .report-dot--attention { background: #cc8b2a !important; }
+  .report-dot--disposal { background: #b44942 !important; }
+  .report-dot--other { background: #6b7a80 !important; }
+
+  .report-location-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 4mm;
+  }
+
+  .report-location-list > div {
+    font-size: 7pt;
+  }
+
+  .report-location-list span {
+    overflow: hidden;
+    color: #3e555b !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .report-location-list strong {
+    flex: 0 0 auto;
+    color: #123640 !important;
+    font-weight: 750;
+  }
+
+  .report-empty {
+    margin: 1mm 0;
+    color: #667b80 !important;
+    font-size: 7pt;
+  }
+
+  .report-register {
+    margin-top: 3mm;
+  }
+
+  .report-register-heading {
+    margin-bottom: 1.5mm;
+  }
+
+  .report-register-heading > p {
+    margin: 0;
+    color: #667b80 !important;
+    font-size: 7pt;
+  }
+
+  .report-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    border: 1px solid #aebfbe;
+    font-size: 6.5pt;
+    line-height: 1.24;
+  }
+
+  .report-table .report-col-property { width: 10%; }
+  .report-table .report-col-type { width: 9%; }
+  .report-table .report-col-model { width: 12%; }
+  .report-table .report-col-serial { width: 9%; }
+  .report-table .report-col-office { width: 12%; }
+  .report-table .report-col-officer { width: 11%; }
+  .report-table .report-col-year { width: 6%; }
+  .report-table .report-col-condition { width: 12%; }
+  .report-table .report-col-pms { width: 8%; }
+  .report-table .report-col-remarks { width: 11%; }
+
+  .report-table thead {
+    display: table-header-group;
+  }
+
+  .report-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-table th {
+    padding: 1.4mm 1.2mm;
+    border: 1px solid #466a70;
+    background: #e3ece9 !important;
+    color: #173b43 !important;
+    font-size: 5.8pt;
+    font-weight: 800;
+    text-align: left;
+    vertical-align: bottom;
+    overflow-wrap: anywhere;
+  }
+
+  .report-table td {
+    padding: 1.2mm 1.2mm;
+    border: 1px solid #d4dfdd;
+    color: #243b40 !important;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .report-table tbody tr:nth-child(even) td {
+    background: #f7f9f8 !important;
+  }
+
+  .report-table .report-property-number {
+    color: #123640 !important;
+    font-weight: 750;
+  }
+
+  .report-table td strong {
+    color: #123640 !important;
+  }
+
+  .report-table .report-empty-row {
+    padding: 6mm;
+    color: #5c7075 !important;
+    text-align: center;
+  }
+
+  .report-footer {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+    gap: 8mm;
+    margin-top: 7mm;
+    padding-top: 3mm;
+    border-top: 1px solid #cdd9d8;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-signature p {
+    margin: 0 0 7mm;
+    color: #5a6e73 !important;
+    font-size: 6.5pt;
+    font-weight: 650;
+  }
+
+  .report-signature > span {
+    display: block;
+    min-height: 5mm;
+    border-bottom: 1px solid #83979a;
+    color: #173b43 !important;
+    font-size: 7pt;
+    font-weight: 700;
+  }
+
+  .report-signature small {
+    display: block;
+    margin-top: 1mm;
+    color: #75878b !important;
+    font-size: 5.7pt;
   }
 
 }

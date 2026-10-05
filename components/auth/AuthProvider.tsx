@@ -17,6 +17,7 @@ export type AuthLoadingMethod = 'password' | 'google' | null;
 
 interface AuthContextValue {
   status: AuthStatus;
+  hasSession: boolean;
   profile: AuthProfile | null;
   loadingMethod: AuthLoadingMethod;
   error: string | null;
@@ -42,9 +43,13 @@ async function responseError(response: Response, fallback: string): Promise<stri
 }
 
 function takeLoginError(): string | null {
-  const message = window.sessionStorage.getItem(LOGIN_ERROR_KEY);
-  if (message) window.sessionStorage.removeItem(LOGIN_ERROR_KEY);
-  return message;
+  try {
+    const message = window.sessionStorage.getItem(LOGIN_ERROR_KEY);
+    if (message) window.sessionStorage.removeItem(LOGIN_ERROR_KEY);
+    return message;
+  } catch {
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -53,9 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInAttemptRef = useRef(0);
   const tokenRef = useRef<string | null>(null);
   const pendingPasswordRef = useRef<PendingPasswordSession | null>(null);
+  const pendingLoginErrorRef = useRef<string | null>(null);
   const profileRef = useRef<AuthProfile | null>(null);
   const statusRef = useRef<AuthStatus>('loading');
   const [status, setStatus] = useState<AuthStatus>('loading');
+  const [hasSession, setHasSession] = useState(false);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [loadingMethod, setLoadingMethod] = useState<AuthLoadingMethod>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +92,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const acceptSession = useCallback((session: Session, nextProfile: AuthProfile) => {
     ++operationRef.current;
     tokenRef.current = session.access_token;
+    setHasSession(true);
+    pendingLoginErrorRef.current = null;
+    takeLoginError();
     pendingPasswordRef.current = null;
     profileRef.current = nextProfile;
     setProfile(nextProfile);
@@ -95,11 +105,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resolveNoSession = useCallback(async (checkSetup: boolean) => {
     const operation = ++operationRef.current;
+    setHasSession(false);
     // A settled login/setup screen should not disappear when an OAuth tab is
     // closed or this document becomes visible again without a new session.
     if (checkSetup && (statusRef.current === 'unauthenticated' || statusRef.current === 'setup_required')) {
       clearGoogleLoading();
-      const loginError = takeLoginError();
+      const loginError = takeLoginError() || pendingLoginErrorRef.current;
+      pendingLoginErrorRef.current = null;
       if (loginError) setError(loginError);
       return;
     }
@@ -108,7 +120,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profileRef.current = null;
     setProfile(null);
     clearGoogleLoading();
-    setError(takeLoginError());
+    setError(takeLoginError() || pendingLoginErrorRef.current);
+    pendingLoginErrorRef.current = null;
     if (!checkSetup) {
       changeStatus('unauthenticated');
       return;
@@ -130,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [changeStatus, clearGoogleLoading, showUnavailable]);
 
   const verifySession = useCallback(async (session: Session, force = false) => {
+    setHasSession(true);
     const pending = pendingPasswordRef.current;
     if (pending?.accessToken === session.access_token && pending.profile.id === session.user.id) {
       acceptSession(session, pending.profile);
@@ -169,7 +183,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.status === 401 || response.status === 403) {
         const message = await responseError(response, 'This account is not authorized to use the inventory dashboard.');
         if (operation !== operationRef.current) return;
-        window.sessionStorage.setItem(LOGIN_ERROR_KEY, message);
+        pendingLoginErrorRef.current = message;
+        try {
+          window.sessionStorage.setItem(LOGIN_ERROR_KEY, message);
+        } catch {
+          // Keep the message in memory when browser storage is unavailable.
+        }
         tokenRef.current = null;
         pendingPasswordRef.current = null;
         profileRef.current = null;
@@ -226,9 +245,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [resolveNoSession, showUnavailable, verifySession]);
 
   useEffect(() => {
-    // The callback exchanges the OAuth code. This page verifies it once after
-    // the redirect to /, avoiding duplicate checks during navigation.
-    if (window.location.pathname === '/auth/callback') return;
+    const pageUrl = new URL(window.location.href);
+    if (pageUrl.searchParams.get('auth_error') === 'google') {
+      const message = 'Google sign-in could not be completed. Please try again.';
+      pendingLoginErrorRef.current = message;
+      pageUrl.searchParams.delete('auth_error');
+      window.history.replaceState(null, '', `${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);
+    }
 
     let active = true;
     let receivedEvent = false;
@@ -318,6 +341,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithPassword = useCallback(async (emailOrUsername: string, password: string) => {
     const attempt = ++signInAttemptRef.current;
     ++operationRef.current;
+    pendingLoginErrorRef.current = null;
+    takeLoginError();
     let credentialsAccepted = false;
     let acceptedToken: string | null = null;
     setError(null);
@@ -377,6 +402,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     ++signInAttemptRef.current;
+    pendingLoginErrorRef.current = null;
+    takeLoginError();
     setError(null);
     clearGoogleLoading();
     setLoadingMethod('google');
@@ -418,10 +445,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [changeStatus, clearGoogleLoading, resolveNoSession, showUnavailable]);
 
   const value = useMemo<AuthContextValue>(() => ({
-    status, profile, loadingMethod, error,
+    status, hasSession, profile, loadingMethod, error,
     signInWithPassword, signInWithGoogle, signOut, retryAuthorization,
     clearError: () => setError(null),
-  }), [status, profile, loadingMethod, error, signInWithPassword, signInWithGoogle, signOut, retryAuthorization]);
+  }), [status, hasSession, profile, loadingMethod, error, signInWithPassword, signInWithGoogle, signOut, retryAuthorization]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

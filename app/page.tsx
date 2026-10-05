@@ -16,7 +16,7 @@ import {
   SyncStatus,
 } from '@/lib/inventoryService';
 import { calculateSummary } from '@/lib/summaryUtils';
-import { exportInventoryToCsv } from '@/lib/exportUtils';
+import { exportInventoryToWorkbook } from '@/lib/exportUtils';
 
 import { Sidebar, SidebarTab } from '@/components/layout/Sidebar';
 import { TopHeader } from '@/components/layout/TopHeader';
@@ -28,6 +28,7 @@ import { EquipmentModal } from '@/components/inventory/EquipmentModal';
 import { EquipmentDetailDrawer } from '@/components/inventory/EquipmentDetailDrawer';
 import { SqlSchemaModal } from '@/components/inventory/SqlSchemaModal';
 import { DeleteConfirmModal } from '@/components/inventory/DeleteConfirmModal';
+import { PrintReport } from '@/components/inventory/PrintReport';
 
 export default function InventoryDashboard() {
   return (
@@ -78,6 +79,8 @@ function InventoryDashboardContent() {
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -151,6 +154,39 @@ function InventoryDashboardContent() {
 
   // Compute live summary
   const summary = useMemo(() => calculateSummary(items), [items]);
+
+  const reportScope = useMemo(() => {
+    const details: string[] = [];
+    const search = filters.searchQuery.trim();
+    if (search) details.push('Search: “' + search + '”');
+    if (filters.type) details.push('Type: ' + filters.type);
+    if (filters.location) details.push('Office / division: ' + filters.location);
+    if (filters.brand) details.push('Brand: ' + filters.brand);
+    if (filters.statusCategory) {
+      details.push(filters.statusCategory === 'Needs Attention'
+        ? 'Condition: Needs attention (including repair and parts replacement)'
+        : 'Condition: ' + filters.statusCategory);
+    }
+    if (filters.shelfLife) details.push('Lifespan: ' + filters.shelfLife.toLowerCase());
+    if (filters.year === '5_YEARS_OLD') details.push('Acquisition: beyond five years');
+    else if (filters.year === 'OLDER') details.push('Acquisition: older than seven years');
+    else if (filters.year) details.push('Year acquired: ' + filters.year);
+
+    return details.length
+      ? 'Filtered dashboard results · ' + details.join(' · ')
+      : 'All inventory records';
+  }, [filters]);
+
+  useEffect(() => {
+    if (!printGeneratedAt) return;
+    const printTimer = window.setTimeout(() => window.print(), 120);
+    const resetAfterPrint = () => setPrintGeneratedAt(null);
+    window.addEventListener('afterprint', resetAfterPrint);
+    return () => {
+      window.clearTimeout(printTimer);
+      window.removeEventListener('afterprint', resetAfterPrint);
+    };
+  }, [printGeneratedAt]);
 
   // Distinct locations & brands for filter dropdowns
   const availableLocations = useMemo(() => {
@@ -362,16 +398,27 @@ function InventoryDashboardContent() {
     showToast(`Ownership transferred to ${updated.accountablePersonnel}`);
   };
 
-  const handleExportCsv = () => {
-    const filename = filters.type
-      ? `PENRO_Batanes_ICT_${filters.type.replace(/\s+/g, '_')}_Inventory.csv`
-      : 'PENRO_Batanes_ICT_Inventory.csv';
-    exportInventoryToCsv(filteredItems, filename);
-    showToast(`Exported ${filteredItems.length} records to CSV`);
+  const handleExportWorkbook = async () => {
+    setIsExporting(true);
+    try {
+      const date = new Date().toISOString().slice(0, 10);
+      await exportInventoryToWorkbook(items, 'PENRO_Batanes_ICT_Inventory_' + date + '.xlsx');
+      showToast('Workbook downloaded · all ' + items.length.toLocaleString() + ' assets across 5 sheets');
+    } catch (error) {
+      showToast(error instanceof Error ? 'Workbook export failed: ' + error.message : 'Workbook export failed. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handlePrintReport = () => {
+    setPrintGeneratedAt(new Date());
+    showToast('Preparing print report · ' + filteredItems.length.toLocaleString() + ' filtered assets');
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden text-zinc-900 selection:bg-green-500/30 selection:text-white dark:text-zinc-50" style={{ background: 'var(--background)' }}>
+    <>
+    <div className="dashboard-shell flex h-screen w-full overflow-hidden text-zinc-900 selection:bg-green-500/30 selection:text-white dark:text-zinc-50" style={{ background: 'var(--background)' }}>
       {/* SaaS Sidebar Navigation (Google Drive / Fingoals style) */}
       <Sidebar
         currentTab={currentTab}
@@ -397,10 +444,13 @@ function InventoryDashboardContent() {
           title="PENRO BATANES ICT INVENTORY"
           searchQuery={filters.searchQuery}
           onSearchChange={(query) => setFilters((prev) => ({ ...prev, searchQuery: query }))}
-          syncStatus={syncStatus}
-          onOpenSqlModal={() => setIsSqlModalOpen(true)}
-          onExportCsv={handleExportCsv}
-          onRefresh={fetchData}
+          onExportWorkbook={handleExportWorkbook}
+          onPrintReport={handlePrintReport}
+          totalItems={items.length}
+          filteredItemCount={filteredItems.length}
+          isInventoryLoading={isLoading}
+          isExporting={isExporting}
+          onRefresh={() => fetchData()}
           isRefreshing={isRefreshing}
         />
 
@@ -582,5 +632,11 @@ function InventoryDashboardContent() {
       />
 
     </div>
+    <PrintReport
+      items={filteredItems}
+      scope={reportScope}
+      generatedAt={printGeneratedAt}
+    />
+    </>
   );
 }

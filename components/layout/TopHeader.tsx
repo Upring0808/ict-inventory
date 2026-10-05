@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AppBrand } from '@/components/branding/AppBrand';
-import { SyncStatus } from '@/lib/inventoryService';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useTheme } from '@/components/theme/ThemeProvider';
 
@@ -11,9 +10,12 @@ interface TopHeaderProps {
   title?: string;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  syncStatus: SyncStatus;
-  onOpenSqlModal: () => void;
-  onExportCsv: () => void;
+  onExportWorkbook: () => void;
+  onPrintReport: () => void;
+  totalItems: number;
+  filteredItemCount: number;
+  isInventoryLoading?: boolean;
+  isExporting?: boolean;
   onRefresh: () => void;
   isRefreshing?: boolean;
 }
@@ -23,9 +25,12 @@ export function TopHeader({
   title = 'PENRO BATANES ICT INVENTORY',
   searchQuery,
   onSearchChange,
-  syncStatus,
-  onOpenSqlModal,
-  onExportCsv,
+  onExportWorkbook,
+  onPrintReport,
+  totalItems,
+  filteredItemCount,
+  isInventoryLoading = false,
+  isExporting = false,
   onRefresh,
   isRefreshing,
 }: TopHeaderProps) {
@@ -36,6 +41,10 @@ export function TopHeader({
   const avatarFailed = Boolean(profile?.avatarUrl && failedAvatarUrl === profile.avatarUrl);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const profileTriggerRef = useRef<HTMLButtonElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const exportTriggerRef = useRef<HTMLButtonElement>(null);
+  const workbookOptionRef = useRef<HTMLButtonElement>(null);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!isProfileOpen) return;
@@ -59,6 +68,31 @@ export function TopHeader({
       document.removeEventListener('keydown', closeOnEscape);
     };
   }, [isProfileOpen]);
+
+  useEffect(() => {
+    if (!isExportMenuOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && !exportMenuRef.current?.contains(event.target)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsExportMenuOpen(false);
+        exportTriggerRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    const focusFrame = window.requestAnimationFrame(() => workbookOptionRef.current?.focus());
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+      window.cancelAnimationFrame(focusFrame);
+    };
+  }, [isExportMenuOpen]);
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/95 px-4 py-2.5 backdrop-blur-md transition-colors dark:border-zinc-800/70 dark:bg-zinc-950/95 sm:px-6">
@@ -114,13 +148,7 @@ export function TopHeader({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-            ) : (
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <kbd className="rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-400 dark:border-zinc-700 dark:bg-zinc-700 dark:text-zinc-400">
-                  ⌘K
-                </kbd>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -139,7 +167,7 @@ export function TopHeader({
           </a>
           {/* Refresh button */}
           <button
-            onClick={onRefresh}
+            onClick={() => onRefresh()}
             disabled={isRefreshing}
             className="hidden h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-2xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:flex"
             title="Refresh records"
@@ -189,35 +217,97 @@ export function TopHeader({
             )}
           </button>
 
-          {/* Cloud Sync Button */}
-          <button
-            onClick={onOpenSqlModal}
-            className={`hidden h-8 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition sm:flex ${syncStatus.source === 'supabase'
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
-              : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
-              }`}
-            title="Database sync settings"
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${syncStatus.source === 'supabase' ? 'bg-emerald-500 animate-pulse' : 'bg-blue-600'
-                }`}
-            />
-            <span className="hidden sm:inline">
-              {syncStatus.source === 'supabase' ? 'Supabase Live' : 'Cloud Sync'}
-            </span>
-          </button>
-
-          {/* Export CSV Button */}
-          <button
-            onClick={onExportCsv}
-            className="hidden h-8 items-center gap-1 rounded-xl border border-zinc-200 bg-white px-2.5 text-xs font-semibold text-zinc-700 shadow-2xs hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:flex"
-            title="Download CSV report"
-          >
-            <svg className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span className="hidden sm:inline">Export CSV</span>
-          </button>
+          {/* Export menu stays available on touch-sized screens. */}
+          <div ref={exportMenuRef} className="relative">
+            <button
+              ref={exportTriggerRef}
+              type="button"
+              onClick={() => setIsExportMenuOpen((open) => !open)}
+              aria-expanded={isExportMenuOpen}
+              aria-controls="inventory-export-menu"
+              aria-label={isExportMenuOpen ? 'Close export options' : 'Open export options'}
+              title="Export inventory"
+              className="flex h-9 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-2.5 text-zinc-700 shadow-2xs transition hover:border-emerald-300 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-emerald-800 dark:hover:bg-zinc-800 sm:h-8 sm:px-3"
+            >
+              <svg className="h-4 w-4 text-emerald-700 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3v11m0 0 4-4m-4 4-4-4M5 16v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" />
+              </svg>
+              <span className="hidden text-xs font-semibold sm:inline">Export</span>
+              <svg className={'hidden h-3 w-3 text-zinc-400 transition sm:block ' + (isExportMenuOpen ? 'rotate-180' : '')} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            <div
+              id="inventory-export-menu"
+              role="region"
+              aria-label="Inventory export options"
+              hidden={!isExportMenuOpen}
+              aria-busy={isExporting}
+              className="absolute right-0 top-full z-[60] mt-2 w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-zinc-200 bg-white p-2 shadow-xl shadow-zinc-900/15 ring-1 ring-black/5 dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/40 dark:ring-white/5"
+            >
+              <div className="px-3 pb-2 pt-2">
+                <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Choose an export format</p>
+                <p className="mt-1 text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">
+                  {isInventoryLoading
+                    ? 'Inventory is loading. Export options will be ready shortly.'
+                    : totalItems.toLocaleString() + ' total assets · ' + filteredItemCount.toLocaleString() + ' in the current view'}
+                </p>
+              </div>
+              <button
+                ref={workbookOptionRef}
+                type="button"
+                disabled={isInventoryLoading || isExporting}
+                onClick={() => {
+                  setIsExportMenuOpen(false);
+                  exportTriggerRef.current?.focus();
+                  onExportWorkbook();
+                }}
+                className="flex min-h-16 w-full items-start gap-3 rounded-xl p-3 text-left transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-emerald-950/30"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+                  <svg className="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5.75A1.75 1.75 0 0 1 5.75 4h12.5A1.75 1.75 0 0 1 20 5.75v12.5A1.75 1.75 0 0 1 18.25 20H5.75A1.75 1.75 0 0 1 4 18.25V5.75ZM4.5 10h15M10 4.5v15M14 4.5v15" />
+                  </svg>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      {isExporting ? 'Building workbook…' : 'Excel workbook'}
+                    </span>
+                    <span className="shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">.xlsx</span>
+                  </span>
+                  <span className="mt-1 block text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">
+                    All inventory categories · summary plus four editable sheets
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={isInventoryLoading || isExporting}
+                onClick={() => {
+                  setIsExportMenuOpen(false);
+                  exportTriggerRef.current?.focus();
+                  onPrintReport();
+                }}
+                className="flex min-h-16 w-full items-start gap-3 rounded-xl p-3 text-left transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-blue-950/30"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
+                  <svg className="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v4a2 2 0 0 1-2 2h-2m-10-3h10v6H7v-6Zm11-4h.01" />
+                  </svg>
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Print report</span>
+                    <span className="shrink-0 rounded-md bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-800 dark:bg-blue-950/50 dark:text-blue-300">A4</span>
+                  </span>
+                  <span className="mt-1 block text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">
+                    Current filtered results · summary and asset register
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
 
           {/* Authenticated account profile */}
           <div ref={profileMenuRef} className="relative border-l border-zinc-200 pl-2 dark:border-zinc-800 sm:pl-3">
