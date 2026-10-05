@@ -1,32 +1,18 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { InventoryItem } from '@/types/inventory';
-import { findPublicEquipment, recordPublicQrVerification } from '@/lib/publicEquipmentClient';
+import { useRouter } from 'next/navigation';
+import { AppBrand } from '@/components/branding/AppBrand';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { StatusBadge } from './StatusBadge';
+import { findPublicEquipment, recordPublicQrVerification } from '@/lib/publicEquipmentClient';
+import type { InventoryItem } from '@/types/inventory';
+import { EquipmentVerificationActionPanel } from './EquipmentVerificationActionPanel';
+import { EquipmentVerificationRecordDetails } from './EquipmentVerificationRecordDetails';
+import { EquipmentVerificationSummary } from './EquipmentVerificationSummary';
 
 interface EquipmentVerificationExperienceProps {
   propertyNumber: string | null;
-}
-
-function formatDate(value?: string) {
-  if (!value) return 'Not yet verified';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
-}
-
-function ReviewField({ label, value }: { label: string; value?: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{label}</dt>
-      <dd className="mt-1 break-words text-[15px] font-semibold leading-5 text-zinc-900 dark:text-zinc-100 sm:text-sm">{value || '—'}</dd>
-    </div>
-  );
 }
 
 export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVerificationExperienceProps) {
@@ -39,13 +25,13 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
   const [verificationComment, setVerificationComment] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [resolveActiveRemark, setResolveActiveRemark] = useState(false);
-  const [showAllCheckIns, setShowAllCheckIns] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
+
     const load = async () => {
       setIsLoading(true);
       setLoadError(null);
@@ -53,25 +39,34 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
       setErrorMessage(null);
       setConfirmed(false);
       setResolveActiveRemark(false);
-      setShowAllCheckIns(false);
+
       try {
         const found = propertyNumber ? await findPublicEquipment(propertyNumber) : null;
         if (active) setItem(found);
-      } catch (loadError) {
+      } catch (error) {
         if (active) {
           setItem(null);
-          setLoadError(loadError instanceof Error ? loadError.message : 'Equipment details are temporarily unavailable.');
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : 'Equipment details are temporarily unavailable.'
+          );
         }
       } finally {
         if (active) setIsLoading(false);
       }
     };
+
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [propertyNumber, loadAttempt]);
 
-  const handleVerify = async () => {
+  const handleVerify = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!item || !profile || !confirmed || isSaving) return;
+
     setIsSaving(true);
     setSuccessMessage(null);
     setErrorMessage(null);
@@ -86,258 +81,121 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
       setConfirmed(false);
       setVerificationComment('');
       setResolveActiveRemark(false);
-      setSuccessMessage('Verification recorded! Returning to scanner…');
-      // Redirect back to scanner after a short delay so the user sees the success message
-      setTimeout(() => {
+      setSuccessMessage('Check-in saved. Returning to the scanner…');
+      window.setTimeout(() => {
         router.push('/scanner');
       }, 1600);
     } catch {
-      setErrorMessage('We could not save the verification. Please check your connection and try again.');
+      setErrorMessage('We could not save this check-in. Check your connection and try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const isComputer = item?.equipmentType === 'Desktop Computers' || item?.equipmentType === 'Laptop Computers';
   const verificationCount = item?.verificationCount ?? item?.verificationHistory?.length ?? 0;
 
   return (
-    <main className="min-h-screen min-h-[100svh] bg-zinc-50 px-3 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 sm:pt-[calc(2rem+env(safe-area-inset-top,0px))] sm:pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
-      <div className="mx-auto w-full max-w-2xl">
-        <header className="mb-4 flex items-center justify-between gap-2 sm:mb-5 sm:gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-700 text-white dark:bg-blue-600">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3Zm0 0h3a3 3 0 1 0 0-6 3 3 0 0 0-2.83 2M3 20a6 6 0 0 1 12 0v1H3v-1Zm12.5-3.5a4.5 4.5 0 0 1 5.5 4.38V21h-4" /></svg>
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-[9px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400 sm:text-[10px] sm:tracking-[0.14em]">PENRO Batanes · ICT Inventory</p>
-              <h1 className="truncate text-[15px] font-bold tracking-tight sm:text-lg">Equipment verification</h1>
-            </div>
-          </div>
-          <a
+    <main className="min-h-[100svh] bg-slate-100 px-3 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-[calc(1rem+env(safe-area-inset-top,0px))] text-slate-950 selection:bg-emerald-200 selection:text-slate-950 dark:bg-slate-950 dark:text-slate-50 dark:selection:bg-emerald-900 dark:selection:text-white sm:px-6 sm:pb-[calc(2rem+env(safe-area-inset-bottom,0px))] sm:pt-[calc(1.5rem+env(safe-area-inset-top,0px))]">
+      <div className="mx-auto w-full max-w-6xl">
+        <nav
+          aria-label="Equipment verification navigation"
+          className="mb-5 flex min-h-12 items-center justify-between gap-3 border-b border-slate-300 pb-3 dark:border-slate-700"
+        >
+          <AppBrand
+            size={34}
+            className="inline-flex min-w-0 items-center gap-2.5"
+            organizationClassName="block truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600 dark:text-slate-400"
+            nameClassName="block truncate text-sm font-bold tracking-tight text-slate-950 dark:text-white"
+            descriptorClassName="ml-1.5 text-[0.82em] font-semibold tracking-normal text-slate-600 dark:text-slate-400"
+          />
+          <Link
             href="/scanner"
-            className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg px-2.5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700/50 dark:text-emerald-300 dark:hover:bg-slate-900"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z" /></svg>
-            Scanner
-          </a>
+            Back to scanner
+          </Link>
+        </nav>
+
+        <header className="mb-5 sm:mb-6">
+          <h1 className="text-[28px] font-semibold leading-tight tracking-tight text-slate-950 dark:text-white sm:text-3xl">
+            Equipment verification
+          </h1>
+          <p className="mt-1.5 max-w-2xl text-sm leading-5 text-slate-700 dark:text-slate-300">
+            Compare this record with the physical equipment, then save a check-in.
+          </p>
         </header>
 
         {isLoading ? (
-          <div className="space-y-5 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6" aria-busy="true" aria-label="Loading equipment details">
-            <div className="skeleton h-5 w-2/3 rounded" />
-            <div className="skeleton h-20 rounded-xl" />
-            <div className="skeleton h-14 rounded-xl" />
+          <div
+            className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)]"
+            aria-busy="true"
+            aria-label="Loading equipment details"
+          >
+            <section className="space-y-4 rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+              <div className="skeleton h-5 w-2/5 rounded" />
+              <div className="skeleton h-9 w-3/4 rounded" />
+              <div className="skeleton h-12 rounded-lg" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="skeleton h-14 rounded" />
+                <div className="skeleton h-14 rounded" />
+                <div className="skeleton h-14 rounded" />
+                <div className="skeleton h-14 rounded" />
+              </div>
+            </section>
+            <section className="space-y-4 rounded-xl border border-slate-300 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
+              <div className="skeleton h-6 w-3/5 rounded" />
+              <div className="skeleton h-16 rounded-lg" />
+              <div className="skeleton h-24 rounded-lg" />
+            </section>
           </div>
         ) : !item ? (
-          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30 sm:p-6" role={loadError ? 'alert' : 'status'}>
-            <h2 className="text-base font-bold text-amber-950 dark:text-amber-100">Equipment not found</h2>
-            <p className="mt-2 text-sm leading-relaxed text-amber-800 dark:text-amber-200">{loadError || 'This label may be old, or the equipment could not be found. Ask an ICT administrator to refresh or replace the QR label.'}</p>
+          <section
+            className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30 sm:p-5"
+            role={loadError ? 'alert' : 'status'}
+          >
+            <h2 className="text-base font-semibold text-amber-950 dark:text-amber-100">
+              Equipment not found
+            </h2>
+            <p className="mt-1.5 max-w-2xl text-sm leading-5 text-amber-900 dark:text-amber-200">
+              {loadError ||
+                'This label may be old, or the equipment could not be found. Ask an ICT administrator to refresh or replace the QR label.'}
+            </p>
             {loadError && (
               <button
                 type="button"
                 onClick={() => setLoadAttempt((attempt) => attempt + 1)}
-                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-900 px-4 text-sm font-semibold text-white transition hover:bg-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-white"
+                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-amber-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-white"
               >
                 Try again
               </button>
             )}
           </section>
         ) : (
-          <div className="space-y-4 sm:space-y-5">
-            <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <header className="px-4 pb-4 pt-4 sm:px-6 sm:pb-5 sm:pt-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-md bg-blue-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">{item.equipmentType}</span>
-                  <StatusBadge category={item.statusCategory} rawStatus={item.status} remarks={item.remarks} size="sm" showRemark={false} />
-                </div>
-                <h2 className="mt-3 break-words text-xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-2xl">{item.model}</h2>
-                <p className="mt-1 break-words text-[15px] text-zinc-600 dark:text-zinc-400 sm:text-sm">{item.brand}</p>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                  <p className="min-w-0 flex-1 break-all font-mono text-sm font-semibold tracking-wide text-zinc-700 dark:text-zinc-300">{item.propertyNumber}</p>
-                  {profile && (
-                    <Link
-                      href={`/?edit=${encodeURIComponent(item.propertyNumber)}`}
-                      className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:text-blue-300 dark:hover:bg-zinc-800"
-                    >
-                      Edit details
-                    </Link>
-                  )}
-                </div>
-              </header>
-
-              <dl className="grid grid-cols-1 gap-y-4 border-t border-zinc-100 px-4 py-4 dark:border-zinc-800 sm:grid-cols-2 sm:gap-x-5 sm:px-6">
-                <ReviewField label="Accountable person" value={item.accountablePersonnel} />
-                <ReviewField label="Office / division" value={item.location} />
-                <ReviewField label="Serial number" value={item.serialNumber} />
-                <ReviewField label="Last verified" value={formatDate(item.lastVerifiedAt)} />
-              </dl>
-
-              {item.remarks && (
-                <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm leading-relaxed text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100 sm:mx-6">
-                  <span className="font-semibold">Maintenance note · </span>{item.remarks}
-                </div>
-              )}
-
-              <details className="group border-t border-zinc-100 dark:border-zinc-800">
-                <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40 dark:text-zinc-200 dark:hover:bg-zinc-800/50 sm:px-6 [&::-webkit-details-marker]:hidden">
-                  <span>Full equipment record</span>
-                  <svg className="h-4 w-4 shrink-0 text-zinc-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" /></svg>
-                </summary>
-                <div className="border-t border-zinc-100 px-5 py-4 dark:border-zinc-800 sm:px-6">
-                  <dl className="grid grid-cols-1 gap-y-4 sm:grid-cols-2 sm:gap-x-5">
-                    <ReviewField label="Year acquired" value={item.yearAcquired} />
-                    <ReviewField label="Shelf life" value={item.shelfLife} />
-                    <ReviewField label="Accountable sex" value={item.accountableSex} />
-                    <ReviewField label="Employment status" value={item.accountableStatus} />
-                    <ReviewField label="Condition" value={item.statusCategory} />
-                    <ReviewField label="Reported status" value={item.status} />
-                  </dl>
-                  {isComputer && (
-                    <section className="mt-5 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-                      <h3 className="mb-3 text-xs font-semibold text-zinc-700 dark:text-zinc-200">Hardware &amp; software</h3>
-                      <dl className="grid grid-cols-1 gap-y-4 sm:grid-cols-2 sm:gap-x-5">
-                        <ReviewField label="Computer name" value={item.computerName} />
-                        <ReviewField label="Range category" value={item.rangeCategory} />
-                        <ReviewField label="Processor" value={item.processor} />
-                        <ReviewField label="RAM" value={item.ram} />
-                        <ReviewField label="Graphics / GPU" value={item.gpu} />
-                        <ReviewField label="Operating system" value={item.osInstalled} />
-                        <ReviewField label="Office software" value={item.officeProductivityProduct} />
-                        <ReviewField label="Endpoint protection" value={item.endpointProtection} />
-                      </dl>
-                    </section>
-                  )}
-                </div>
-              </details>
-
-              <details className="group border-t border-zinc-100 dark:border-zinc-800">
-                <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40 dark:text-zinc-200 dark:hover:bg-zinc-800/50 sm:px-6 [&::-webkit-details-marker]:hidden">
-                  <span>Verification history</span>
-                  <span className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{verificationCount} check-in{verificationCount === 1 ? '' : 's'}</span>
-                    <svg className="h-4 w-4 shrink-0 text-zinc-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" /></svg>
-                  </span>
-                </summary>
-                <div className="border-t border-zinc-100 px-5 py-4 dark:border-zinc-800 sm:px-6">
-                  {!item.verificationHistory?.length ? (
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">No QR check-ins have been recorded yet.</p>
-                  ) : (
-                    <>
-                      <ol className="space-y-4 border-l border-zinc-200 pl-4 dark:border-zinc-700">
-                        {(showAllCheckIns ? item.verificationHistory : item.verificationHistory.slice(0, 3)).map((checkIn) => (
-                          <li key={checkIn.id} className="relative">
-                            <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-blue-600 dark:border-zinc-900" />
-                            <p className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-200">
-                              {formatDate(checkIn.verifiedAt)}{checkIn.verifiedBy ? ` · ${checkIn.verifiedBy}` : ''}
-                            </p>
-                            {checkIn.verifiedByEmail && <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">{checkIn.verifiedByEmail}</p>}
-                            {checkIn.comment && <p className="mt-1.5 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{checkIn.comment}</p>}
-                            {checkIn.remarkResolved && (
-                              <p className="mt-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                                Resolved active remark{checkIn.resolvedRemark ? `: ${checkIn.resolvedRemark}` : ''}
-                              </p>
-                            )}
-                          </li>
-                        ))}
-                      </ol>
-                      {item.verificationHistory.length > 3 && (
-                        <button
-                          type="button"
-                          onClick={() => setShowAllCheckIns((showAll) => !showAll)}
-                          className="mt-3 inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:text-blue-300 dark:hover:bg-zinc-800"
-                        >
-                          {showAllCheckIns ? 'Show recent check-ins' : `Show all ${item.verificationHistory.length} check-ins`}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </details>
-            </article>
-
-            {authStatus === 'loading' ? (
-              <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6" aria-label="Loading verification form" aria-busy="true">
-                <div className="skeleton h-12 rounded-xl" />
-              </section>
-            ) : profile ? (
-              <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-                <div>
-                  <h3 className="text-lg font-bold tracking-tight text-zinc-950 dark:text-white">Verify this equipment</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">Check the physical item against the serial number, location, and accountable person before recording.</p>
-                </div>
-
-                <p className="mt-4 rounded-xl bg-blue-50 px-3.5 py-3 text-sm leading-relaxed text-blue-950 dark:bg-blue-950/35 dark:text-blue-100">
-                  <span className="font-semibold">Recorded under </span><span className="break-words font-semibold">{profile.name || profile.email}</span>{profile.name && profile.email ? ` · ${profile.email}` : ''}
-                </p>
-
-                <label htmlFor="verification-comment" className="mt-5 block text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                  Note <span className="font-normal text-zinc-500 dark:text-zinc-400">· optional</span>
-                </label>
-                <textarea
-                  id="verification-comment"
-                  value={verificationComment}
-                  onChange={(e) => setVerificationComment(e.target.value)}
-                  rows={3}
-                  maxLength={500}
-                  placeholder="Add an observation from this check."
-                  className="mt-1.5 min-h-24 w-full resize-y rounded-xl border border-zinc-300 bg-white px-3.5 py-3 text-base text-zinc-900 outline-none placeholder:text-zinc-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-400"
-                />
-
-                {item.remarks && (
-                  <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 p-3.5 text-sm leading-relaxed text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800/50">
-                    <input
-                      type="checkbox"
-                      checked={resolveActiveRemark}
-                      onChange={(e) => setResolveActiveRemark(e.target.checked)}
-                      className="mt-0.5 h-5 w-5 shrink-0 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <span><span className="font-semibold">Resolve active maintenance note</span><span className="block text-zinc-500 dark:text-zinc-400">Clear “{item.remarks}” after this check-in. The equipment condition will stay unchanged.</span></span>
-                  </label>
-                )}
-
-                <label className="mt-3 flex min-h-16 cursor-pointer items-start gap-3 rounded-xl bg-zinc-50 p-3.5 text-sm leading-relaxed text-zinc-800 transition hover:bg-zinc-100 dark:bg-zinc-800/60 dark:text-zinc-200 dark:hover:bg-zinc-800">
-                  <input
-                    type="checkbox"
-                    checked={confirmed}
-                    onChange={(e) => setConfirmed(e.target.checked)}
-                    className="mt-0.5 h-5 w-5 shrink-0 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span>I checked this physical equipment and confirm these details are accurate.</span>
-                </label>
-
-                <button
-                  onClick={handleVerify}
-                  disabled={!confirmed || isSaving}
-                  className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-base font-semibold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:ring-offset-zinc-900"
-                >
-                  {isSaving ? (
-                    <>
-                      <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-                      Saving verification…
-                    </>
-                  ) : (
-                    'Record verification'
-                  )}
-                </button>
-
-                {successMessage && (
-                  <div className="mt-3 flex items-start gap-2 rounded-xl bg-emerald-50 p-3.5 text-sm font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200" role="status">
-                    <svg className="h-4 w-4 shrink-0 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="m5 13 4 4L19 7" /></svg>
-                    {successMessage}
-                  </div>
-                )}
-                {errorMessage && (
-                  <p className="mt-3 rounded-xl bg-rose-50 p-3.5 text-sm font-medium text-rose-800 dark:bg-rose-950/40 dark:text-rose-200" role="alert">{errorMessage}</p>
-                )}
-              </section>
-            ) : (
-              <section className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 dark:border-blue-900/50 dark:bg-blue-950/25 sm:p-5">
-                <h3 className="text-base font-semibold text-blue-950 dark:text-blue-100">Public equipment record</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-blue-800 dark:text-blue-200">Anyone can view this record. Sign in with an authorized inventory account to record a check-in or edit the asset.</p>
-                <Link href="/" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:bg-blue-600 dark:hover:bg-blue-500">Administrator sign in</Link>
-              </section>
-            )}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)] lg:items-start lg:gap-5">
+            <EquipmentVerificationSummary item={item} canEdit={Boolean(profile)} />
+            <EquipmentVerificationRecordDetails
+              item={item}
+              verificationCount={verificationCount}
+              className="lg:col-start-1 lg:row-start-2"
+            />
+            <EquipmentVerificationActionPanel
+              item={item}
+              isAuthLoading={authStatus === 'loading'}
+              isAuthorized={Boolean(profile)}
+              actorName={profile?.name || null}
+              actorEmail={profile?.email || null}
+              verificationComment={verificationComment}
+              confirmed={confirmed}
+              resolveActiveRemark={resolveActiveRemark}
+              isSaving={isSaving}
+              successMessage={successMessage}
+              errorMessage={errorMessage}
+              onCommentChange={setVerificationComment}
+              onConfirmationChange={setConfirmed}
+              onRemarkResolutionChange={setResolveActiveRemark}
+              onSubmit={handleVerify}
+              className="lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:sticky lg:top-4 lg:self-start"
+            />
           </div>
         )}
       </div>

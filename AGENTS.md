@@ -1,9 +1,24 @@
-<!-- BEGIN:nextjs-agent-rules -->
+# Project
 
-# This is NOT the Next.js you know
+Stack:
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- Supabase/PostgreSQL
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+Engineering rules:
+- Prefer Server Components unless client state is required.
+- Keep components small and reusable.
+- Never duplicate existing utilities/components.
+- Preserve existing authentication and RLS behavior.
+- Never weaken database security to fix an error.
+- Avoid `any`.
+- Validate user input.
+- Handle loading, empty, error, and success states.
+- Run typecheck, lint, and relevant tests after meaningful changes.
 
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
+Workflow:
+- Inspect existing implementation before modifying it.
+- For significant changes, create a plan before coding.
+- Prefer fixing root causes over patches.
+- Don't rewrite unrelated code.
