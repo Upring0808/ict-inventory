@@ -119,7 +119,7 @@ export function getBrandDistribution(items: InventoryItem[], limit = 8): { brand
     .slice(0, limit);
 }
 
-export function getOsDistribution(items: InventoryItem[]): { os: string; count: number; color: string }[] {
+export function getOsDistribution(items: InventoryItem[]): { os: string; count: number }[] {
   const counts: Record<string, number> = {};
   for (const item of items) {
     if (!item.osInstalled) continue;
@@ -131,19 +131,10 @@ export function getOsDistribution(items: InventoryItem[]): { os: string; count: 
     else counts['Other OS'] = (counts['Other OS'] || 0) + 1;
   }
 
-  const colorMap: Record<string, string> = {
-    'Windows 11': 'from-blue-500 to-indigo-600',
-    'Windows 10': 'from-indigo-400 to-blue-500',
-    'Windows 8 (Legacy)': 'from-amber-500 to-orange-500',
-    'Windows 7 (Legacy)': 'from-rose-500 to-red-600',
-    'Other OS': 'from-zinc-400 to-zinc-500',
-  };
-
   return Object.entries(counts)
     .map(([os, count]) => ({
       os,
       count,
-      color: colorMap[os] || 'from-zinc-400 to-zinc-500',
     }))
     .sort((a, b) => b.count - a.count);
 }

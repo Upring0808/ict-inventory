@@ -22,12 +22,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return (
       <main className="grid min-h-screen place-items-center bg-zinc-50 px-5 dark:bg-zinc-950">
         <section className="max-w-lg rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-green-600 to-blue-600 text-white">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-emerald-700 text-white">
             <span className="text-lg font-bold">ICT</span>
           </div>
           <h1 className="mt-5 text-xl font-bold text-zinc-900 dark:text-zinc-50">Set up the first authorized account</h1>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">The dashboard is ready for its first administrator. Use the one-time setup key configured by the system maintainer.</p>
-          <Link href="/setup" className="mt-6 inline-flex rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm">Start secure setup</Link>
+          <Link href="/setup" className="mt-6 inline-flex rounded-lg bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-800">Start secure setup</Link>
         </section>
       </main>
     );

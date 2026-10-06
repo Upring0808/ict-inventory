@@ -54,7 +54,7 @@ export function Sidebar({
       label: string;
       icon: React.ReactNode;
       count?: number;
-      accent?: 'default' | 'red' | 'amber';
+      accent?: 'default' | 'red' | 'amber' | 'green';
     }[];
   }[] = [
       {
@@ -141,23 +141,24 @@ export function Sidebar({
             ),
           },
           {
-            id: 'verified',
-            label: 'Verified',
-            count: verifiedCount,
-            icon: (
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m5 12 4 4L19 6M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" />
-              </svg>
-            ),
-          },
-          {
             id: 'unverified',
             label: 'Not Verified',
             count: unverifiedCount,
             accent: 'amber',
             icon: (
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M10.3 3.9 2.7 17.5A2 2 0 0 0 4.4 20.5h15.2a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l2.5 1.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+              </svg>
+            ),
+          },
+          {
+            id: 'verified',
+            label: 'Verified',
+            count: verifiedCount,
+            accent: 'green',
+            icon: (
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m5 12 4 4L19 6M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" />
               </svg>
             ),
           },
@@ -189,6 +190,7 @@ export function Sidebar({
     ];
 
   const issueCount = summary.needsAttentionCount + summary.partsReplacementCount + summary.forRepairCount;
+  const isCompact = isCollapsed && !isMobileOpen;
 
   return (
     <>
@@ -202,31 +204,34 @@ export function Sidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`sidebar-shell fixed inset-y-0 left-0 z-50 flex w-60 h-full shrink-0 transform-gpu flex-col border-r border-zinc-200/80 bg-white transition-[width,transform] duration-300 ease-out dark:border-zinc-800/80 dark:bg-zinc-950 lg:static lg:h-screen lg:shrink-0 lg:translate-x-0 ${isCollapsed ? 'sidebar-collapsed lg:w-[72px]' : 'lg:w-60'} ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`sidebar-shell fixed inset-y-0 left-0 z-50 flex h-full w-60 shrink-0 transform-gpu flex-col border-r border-zinc-200/80 bg-white transition-[width,transform] duration-200 ease-out dark:border-zinc-800/80 dark:bg-zinc-950 lg:static lg:h-screen lg:shrink-0 lg:translate-x-0 ${isCompact ? 'sidebar-collapsed lg:w-[72px]' : 'lg:w-60'} ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
       >
         {/* Logo / Title */}
-        <div className={`relative flex items-center justify-between border-b border-zinc-100 px-4 py-4 dark:border-zinc-800/60 ${isCollapsed ? 'lg:justify-center lg:px-0' : ''}`}>
+        <div className={`relative flex items-center justify-between border-b border-zinc-100 px-4 py-4 dark:border-zinc-800/60 ${isCompact ? 'lg:justify-center lg:px-0' : ''}`}>
           <AppBrand
-            size={32}
-            showOrganization={!isCollapsed}
-            showName={!isCollapsed}
-            organizationClassName="block truncate text-[9px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider"
-            nameClassName="block truncate text-[11px] font-black tracking-widest text-zinc-900 uppercase dark:text-zinc-50"
-            className="inline-flex min-w-0 items-center gap-2.5"
-            markClassName="inline-flex h-8 w-8 shrink-0"
+            size={36}
+            showOrganization={!isCompact}
+            showName={!isCompact}
+            organizationClassName="block truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400"
+            nameClassName="block truncate text-[13px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+            className="inline-flex min-w-0 items-center gap-3"
+            markClassName="inline-flex h-9 w-9 shrink-0"
           />
           <button
+            type="button"
             onClick={onCloseMobile}
-            className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 lg:hidden"
+            className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 dark:focus-visible:ring-emerald-400/50 lg:hidden"
+            aria-label="Close sidebar navigation"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           <button
+            type="button"
             onClick={onToggleCollapsed}
-            className="absolute -right-3 top-1/2 z-10 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 shadow-sm transition hover:scale-105 hover:bg-zinc-50 hover:text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 lg:flex"
+            className="absolute -right-3 top-1/2 z-10 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-500 shadow-sm transition-colors hover:bg-zinc-50 hover:text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:focus-visible:ring-emerald-400/50 lg:flex"
             title={isCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
             aria-label={isCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
           >
@@ -239,39 +244,40 @@ export function Sidebar({
         {/* Add Asset Button */}
         <div className="px-3 pt-3 space-y-2">
           <button
+            type="button"
             onClick={() => {
               onOpenAddModal();
               if (isMobileOpen) onCloseMobile();
             }}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-98"
-            title={isCollapsed ? 'Add equipment' : undefined}
-            style={{ background: 'linear-gradient(135deg, #16a34a 0%, #2563eb 100%)' }}
+            className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-2.5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-800 active:bg-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
+            title={isCompact ? 'Add equipment' : undefined}
+            aria-label="Add equipment"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            <span className={`sidebar-label overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-28 opacity-100'}`}>Add Equipment</span>
+            <span className={`sidebar-label overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-150 ${isCompact ? 'max-w-0 opacity-0' : 'max-w-28 opacity-100'}`}>Add Equipment</span>
           </button>
           {/* Scan QR shortcut — big and obvious especially on mobile */}
           <a
             href="/scanner"
             onClick={() => { if (isMobileOpen) onCloseMobile(); }}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl border-2 border-blue-500 bg-blue-50 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 active:scale-98 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/70 sm:hidden"
-            title={isCollapsed ? 'Scan QR code' : undefined}
+            className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[13px] font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/50 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/60 dark:focus-visible:ring-emerald-400/50 sm:hidden"
+            title={isCompact ? 'Scan QR code' : undefined}
           >
             <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z" />
             </svg>
-            <span className={`sidebar-label overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-28 opacity-100'}`}>Scan QR</span>
+            <span className={`sidebar-label overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-150 ${isCompact ? 'max-w-0 opacity-0' : 'max-w-28 opacity-100'}`}>Scan QR</span>
           </a>
         </div>
 
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+        <nav aria-label="Inventory navigation" className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
           {navGroups.map((group) => (
             <div key={group.label}>
-              <p className={`sidebar-label mb-1 overflow-hidden whitespace-nowrap px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-[max-width,opacity] duration-200 dark:text-zinc-600 ${isCollapsed ? 'max-h-0 max-w-0 opacity-0' : 'max-h-4 max-w-32 opacity-100'}`}>
+              <p className={`sidebar-label mb-1 overflow-hidden whitespace-nowrap px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 transition-[max-width,opacity] duration-150 dark:text-zinc-400 ${isCompact ? 'max-h-0 max-w-0 opacity-0' : 'max-h-4 max-w-32 opacity-100'}`}>
                 {group.label}
               </p>
               <div className="space-y-0.5">
@@ -279,6 +285,7 @@ export function Sidebar({
                   const isActive = currentTab === item.id;
                   const isRed = item.accent === 'red';
                   const isAmber = item.accent === 'amber' && (item.count ?? 0) > 0;
+                  const isGreen = item.accent === 'green';
                   return (
                     <button
                       key={item.id}
@@ -288,36 +295,32 @@ export function Sidebar({
                         onSelectTab(item.id);
                         if (isMobileOpen) onCloseMobile();
                       }}
-                      className={`nav-item flex w-full items-center rounded-lg py-2 text-xs font-medium ${isCollapsed ? 'justify-center px-2' : 'justify-between px-2.5'} ${isActive
-                        ? 'text-white shadow-sm'
+                      className={`nav-item flex min-h-10 w-full items-center rounded-lg text-[13px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-700/60 dark:focus-visible:ring-emerald-400/60 ${isCompact ? 'justify-center px-2' : 'justify-between px-2.5'} ${isActive
+                        ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-200'
                         : isRed
                           ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30'
                           : isAmber
                             ? 'text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30'
                           : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100'
                         }`}
-                      style={
-                        isActive
-                          ? { background: 'linear-gradient(135deg, #16a34a 0%, #2563eb 100%)' }
-                          : {}
-                      }
-                      title={isCollapsed ? item.label : undefined}
+                      aria-label={item.label}
+                      title={isCompact ? item.label : undefined}
                     >
-                      <div className={`flex min-w-0 items-center ${isCollapsed ? 'gap-0' : 'gap-2.5'}`}>
-                        <span className={isActive ? 'text-white/90' : isRed ? '' : 'text-zinc-400 dark:text-zinc-500'}>
+                      <div className={`flex min-w-0 items-center ${isCompact ? 'gap-0' : 'gap-2.5'}`}>
+                        <span className={isActive ? 'text-emerald-700 dark:text-emerald-300' : isRed ? 'text-red-600 dark:text-red-400' : isAmber ? 'text-amber-700 dark:text-amber-300' : isGreen ? 'text-emerald-700 dark:text-emerald-300' : 'text-zinc-400 dark:text-zinc-500'}>
                           {item.icon}
                         </span>
-                        <span className={`sidebar-label overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-28 opacity-100'}`}>{item.label}</span>
+                        <span className={`sidebar-label overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-150 ${isCompact ? 'max-w-0 opacity-0' : 'max-w-28 opacity-100'}`}>{item.label}</span>
                       </div>
-                      {item.count !== undefined && !isCollapsed && (
+                      {item.count !== undefined && !isCompact && (
                         <span
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${isActive
-                            ? 'bg-white/20 text-white'
+                          className={`min-w-6 rounded-full px-1.5 py-0.5 text-center text-[10px] font-semibold tabular-nums ${isActive
+                            ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100'
                             : isRed && item.count > 0
                               ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
                               : isAmber
                                 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                              : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                              : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
                             }`}
                         >
                           {item.count}
@@ -335,9 +338,9 @@ export function Sidebar({
         <div className="px-3 pb-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
           {/* Issue Alert */}
           {issueCount > 0 && (
-            <div className={`mb-2 flex items-center rounded-lg bg-red-50 py-2 dark:bg-red-950/30 ${isCollapsed ? 'justify-center px-2' : 'gap-2 px-2.5'}`} title={isCollapsed ? `${issueCount} units need attention` : undefined}>
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500 animate-pulse" />
-              <span className={`sidebar-label overflow-hidden whitespace-nowrap text-[11px] font-semibold text-red-700 transition-[max-width,opacity] duration-200 dark:text-red-400 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-36 opacity-100'}`}>
+            <div className={`mb-2 flex min-h-9 items-center rounded-lg bg-red-50 py-2 dark:bg-red-950/30 ${isCompact ? 'justify-center px-2' : 'gap-2 px-2.5'}`} title={isCompact ? `${issueCount} units need attention` : undefined}>
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+              <span className={`sidebar-label overflow-hidden whitespace-nowrap text-[11px] font-semibold text-red-800 transition-[max-width,opacity] duration-150 dark:text-red-300 ${isCompact ? 'max-w-0 opacity-0' : 'max-w-36 opacity-100'}`}>
                 {issueCount} unit{issueCount !== 1 ? 's' : ''} need attention
               </span>
             </div>
@@ -345,20 +348,22 @@ export function Sidebar({
 
           {/* DB Status */}
           <button
+            type="button"
             onClick={onOpenSqlModal}
-            className={`flex w-full items-center rounded-lg py-1.5 text-left text-xs transition hover:bg-zinc-100 dark:hover:bg-zinc-800/60 ${isCollapsed ? 'justify-center px-2' : 'gap-2 px-2.5'}`}
-            title={isCollapsed ? (syncStatus.source === 'supabase' ? 'Supabase Realtime connected' : 'Local storage') : undefined}
+            className={`flex min-h-9 w-full items-center rounded-lg py-1.5 text-left text-xs transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-700/60 dark:hover:bg-zinc-800/60 dark:focus-visible:ring-emerald-400/60 ${isCompact ? 'justify-center px-2' : 'gap-2 px-2.5'}`}
+            aria-label={syncStatus.source === 'supabase' ? 'Supabase Realtime connected' : 'Local storage mode'}
+            title={isCompact ? (syncStatus.source === 'supabase' ? 'Supabase Realtime connected' : 'Local storage') : undefined}
           >
             <span
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${syncStatus.source === 'supabase' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${syncStatus.source === 'supabase' ? 'bg-emerald-500' : 'bg-zinc-400'
                 }`}
             />
-            <span className={`sidebar-label overflow-hidden whitespace-nowrap text-zinc-500 transition-[max-width,opacity] duration-200 dark:text-zinc-400 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-36 opacity-100'}`}>
+            <span className={`sidebar-label overflow-hidden whitespace-nowrap text-zinc-600 transition-[max-width,opacity] duration-150 dark:text-zinc-300 ${isCompact ? 'max-w-0 opacity-0' : 'max-w-36 opacity-100'}`}>
               {syncStatus.source === 'supabase' ? 'Realtime Sync Active' : 'Local Storage'}
             </span>
           </button>
 
-          <p className={`sidebar-label mt-1 overflow-hidden whitespace-nowrap px-2.5 text-[10px] text-zinc-400 transition-[max-width,opacity] duration-200 dark:text-zinc-600 ${isCollapsed ? 'max-h-0 max-w-0 opacity-0' : 'max-h-4 max-w-40 opacity-100'}`}>
+          <p className={`sidebar-label mt-1 overflow-hidden whitespace-nowrap px-2.5 text-[10px] text-zinc-500 transition-[max-width,opacity] duration-150 dark:text-zinc-400 ${isCompact ? 'max-h-0 max-w-0 opacity-0' : 'max-h-4 max-w-40 opacity-100'}`}>
             DENR PENRO Batanes · Region 2
           </p>
         </div>

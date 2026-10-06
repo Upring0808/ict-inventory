@@ -69,10 +69,7 @@ export function EquipmentQrLabel({ item }: EquipmentQrLabelProps) {
     ctx.fillRect(0, 0, W, H);
 
     // A deliberately quiet header keeps the label useful at small print sizes.
-    const headerGrad = ctx.createLinearGradient(0, 0, W, 0);
-    headerGrad.addColorStop(0, '#14532d');
-    headerGrad.addColorStop(1, '#1e3a8a');
-    ctx.fillStyle = headerGrad;
+    ctx.fillStyle = '#166534';
     ctx.fillRect(0, 0, W, 76);
 
     ctx.textAlign = 'center';
@@ -129,7 +126,7 @@ export function EquipmentQrLabel({ item }: EquipmentQrLabelProps) {
   };
 
   return (
-    <section className="rounded-xl border border-blue-200/80 bg-gradient-to-br from-blue-50 to-emerald-50 p-3.5 dark:border-blue-900/60 dark:from-blue-950/30 dark:to-emerald-950/20">
+    <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 dark:border-emerald-900/60 dark:bg-emerald-950/25">
       <div className="flex items-start gap-3">
         <div className="flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-lg bg-white p-1.5 shadow-sm dark:bg-zinc-50">
           {qrDataUrl ? (

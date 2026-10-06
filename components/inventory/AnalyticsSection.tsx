@@ -51,7 +51,7 @@ export function AnalyticsSection({
       <div className="flex flex-col gap-4 border-b border-zinc-100 pb-4 dark:border-zinc-800/80 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-sm">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-700 text-white">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
@@ -138,7 +138,7 @@ export function AnalyticsSection({
                     cx="50"
                     cy="50"
                     r="40"
-                    className="stroke-blue-600 dark:stroke-blue-500"
+                    className="stroke-emerald-600 dark:stroke-emerald-500"
                     strokeWidth="12"
                     fill="none"
                     strokeDasharray={`${withinStroke} ${circumference}`}
@@ -175,11 +175,11 @@ export function AnalyticsSection({
                   onClick={() => onSelectShelfLife(selectedShelfLife === 'WITHIN 5 YEARS' ? '' : 'WITHIN 5 YEARS')}
                   className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition ${
                     selectedShelfLife === 'WITHIN 5 YEARS'
-                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                       : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400'
                   }`}
                 >
-                  <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
                   <span>Within 5 Yrs ({summary.within5YearsCount})</span>
                 </button>
 
@@ -205,7 +205,7 @@ export function AnalyticsSection({
                 className={`cursor-pointer rounded-2xl border p-4.5 transition-all ${
                   selectedShelfLife === 'BEYOND 5 YEARS'
                     ? 'border-amber-500 bg-amber-500/10 shadow-md dark:border-amber-400'
-                    : 'border-zinc-200 bg-gradient-to-br from-amber-500/5 to-orange-500/5 hover:border-amber-300 dark:border-zinc-800 dark:bg-zinc-800/40'
+                    : 'border-zinc-200 bg-amber-50/60 hover:border-amber-300 dark:border-zinc-800 dark:bg-amber-950/20'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -245,13 +245,13 @@ export function AnalyticsSection({
                 onClick={() => onSelectShelfLife(selectedShelfLife === 'WITHIN 5 YEARS' ? '' : 'WITHIN 5 YEARS')}
                 className={`cursor-pointer rounded-2xl border p-4.5 transition-all ${
                   selectedShelfLife === 'WITHIN 5 YEARS'
-                    ? 'border-blue-500 bg-blue-500/10 shadow-md dark:border-blue-400'
-                    : 'border-zinc-200 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 hover:border-blue-300 dark:border-zinc-800 dark:bg-zinc-800/40'
+                    ? 'border-emerald-500 bg-emerald-500/10 shadow-md dark:border-emerald-400'
+                    : 'border-zinc-200 bg-emerald-50/60 hover:border-emerald-300 dark:border-zinc-800 dark:bg-emerald-950/20'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                       🛡️
                     </span>
                     <div>
@@ -264,7 +264,7 @@ export function AnalyticsSection({
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                    <span className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
                       {summary.within5YearsCount}
                     </span>
                     <span className="block text-[11px] font-semibold text-zinc-400">
@@ -273,7 +273,7 @@ export function AnalyticsSection({
                   </div>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between border-t border-blue-200/40 pt-2.5 text-xs text-blue-700 dark:text-blue-300">
+                <div className="mt-3 flex items-center justify-between border-t border-emerald-200/60 pt-2.5 text-xs text-emerald-800 dark:border-emerald-900/60 dark:text-emerald-300">
                   <span>Recent 2022–2026 units (Core i3/i5/i7 11th–14th Gen, Ultra 7)</span>
                   <span className="font-bold underline">
                     {selectedShelfLife === 'WITHIN 5 YEARS' ? 'Filter Active (Click to clear)' : 'Click to Filter Table →'}
@@ -297,7 +297,10 @@ export function AnalyticsSection({
                     Operating System
                   </span>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold text-white bg-gradient-to-r ${item.color}`}
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.os.includes('Legacy')
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                      }`}
                   >
                     {item.os.includes('Legacy') ? 'Legacy OS' : 'Supported'}
                   </span>

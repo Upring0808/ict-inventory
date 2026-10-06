@@ -180,8 +180,7 @@ export function OverviewView({
         </div>
         <button
           onClick={onOpenAddModal}
-          className="press-scale flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-white shadow-sm hover:shadow-md hover:opacity-90 transition-all"
-          style={{ background: 'linear-gradient(135deg, #16a34a 0%, #2563eb 100%)' }}
+          className="press-scale flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-800 active:bg-emerald-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
         >
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -231,8 +230,8 @@ export function OverviewView({
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Total Assets</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-950/40 dark:to-blue-950/40">
-              <svg className="h-4 w-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40">
+              <svg className="h-4 w-4 text-emerald-700 dark:text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
@@ -385,7 +384,7 @@ export function OverviewView({
                     className="h-full rounded-full transition-all duration-700"
                     style={{
                       width: `${(loc.count / maxLocationCount) * 100}%`,
-                      background: 'linear-gradient(90deg, #16a34a 0%, #2563eb 100%)',
+                      backgroundColor: '#15803d',
                       transitionDelay: `${300 + i * 40}ms`,
                     }}
                   />

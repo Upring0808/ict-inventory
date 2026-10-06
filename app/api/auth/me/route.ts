@@ -16,7 +16,7 @@ export async function GET(request: Request) {
         name: actor.name,
         avatarUrl: actor.avatarUrl,
       },
-      { headers: { 'Cache-Control': 'no-store' } }
+      { headers: { 'Cache-Control': 'no-store', 'Accept-CH': 'Sec-CH-UA-Model, Sec-CH-UA-Platform, Sec-CH-UA-Mobile' } }
     );
   } catch {
     return Response.json({ error: 'Could not validate this account.' }, { status: 503 });

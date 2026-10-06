@@ -1,16 +1,16 @@
 .canvas {
-  --auth-canvas: #f3f1e9;
-  --auth-surface: #fffefd;
-  --auth-text: #17343d;
-  --auth-muted: #5c7074;
-  --auth-line: #d4dedf;
+  --auth-canvas: #f3f5f3;
+  --auth-surface: #ffffff;
+  --auth-text: #202522;
+  --auth-muted: #5e6962;
+  --auth-line: #d7ded9;
   --auth-field: #ffffff;
-  --auth-blue: #1249bd;
-  --auth-blue-hover: #0d3a9b;
-  --auth-link: #1249bd;
-  --auth-link-hover: #0d3a9b;
-  --auth-focus: rgba(18, 73, 189, 0.19);
-  --auth-green: #158420;
+  --auth-primary: #16763a;
+  --auth-primary-hover: #105f2e;
+  --auth-link: #176d38;
+  --auth-link-hover: #10572d;
+  --auth-focus: rgba(22, 118, 58, 0.2);
+  --auth-green: #176d38;
   --auth-canvas-pad: clamp(16px, 2.2vw, 32px);
   position: relative;
   isolation: isolate;
@@ -19,84 +19,25 @@
   place-items: center;
   overflow-x: clip;
   padding: var(--auth-canvas-pad);
-  background:
-    radial-gradient(circle at 8% 4%, rgba(206, 225, 216, 0.46), transparent 36%),
-    radial-gradient(circle at 96% 92%, rgba(221, 230, 216, 0.4), transparent 31%),
-    var(--auth-canvas);
+  background: var(--auth-canvas);
   color: var(--auth-text);
   font-family: "Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif;
 }
 
 :global(html.dark) .canvas {
-  --auth-canvas: #122329;
-  --auth-surface: #1c3037;
-  --auth-text: #f1f6f3;
-  --auth-muted: #b8c9cb;
-  --auth-line: #496067;
-  --auth-field: #233b43;
-  --auth-blue: #4076e9;
-  --auth-blue-hover: #5d8af1;
-  --auth-link: #a9c8ff;
-  --auth-link-hover: #d0e0ff;
-  --auth-focus: rgba(110, 154, 255, 0.3);
-  --auth-green: #8bd68e;
-  background:
-    radial-gradient(circle at 8% 4%, rgba(42, 78, 71, 0.35), transparent 36%),
-    #122329;
-}
-
-.canvasIdentity {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  user-select: none;
-}
-
-.canvasMark {
-  position: absolute;
-  left: -260px;
-  bottom: -255px;
-  width: 680px;
-  height: 680px;
-  opacity: 0.075;
-  mix-blend-mode: multiply;
-  object-fit: contain;
-}
-
-.canvasIdentity::before,
-.canvasIdentity::after {
-  position: absolute;
-  left: -314px;
-  bottom: -308px;
-  width: 788px;
-  height: 788px;
-  border: 1px solid rgba(31, 94, 83, 0.13);
-  border-radius: 50%;
-  content: "";
-}
-
-.canvasIdentity::after {
-  left: -356px;
-  bottom: -350px;
-  width: 872px;
-  height: 872px;
-  border-color: rgba(31, 94, 83, 0.08);
-}
-
-:global(html.dark) .canvasMark {
-  filter: grayscale(1) invert(1);
-  mix-blend-mode: screen;
-  opacity: 0.065;
-}
-
-:global(html.dark) .canvasIdentity::before {
-  border-color: rgba(150, 211, 189, 0.13);
-}
-
-:global(html.dark) .canvasIdentity::after {
-  border-color: rgba(150, 211, 189, 0.08);
+  --auth-canvas: #202124;
+  --auth-surface: #292a2d;
+  --auth-text: #f1f3f4;
+  --auth-muted: #bdc1c6;
+  --auth-line: #44474b;
+  --auth-field: #303134;
+  --auth-primary: #35a45c;
+  --auth-primary-hover: #27864a;
+  --auth-link: #7bd39a;
+  --auth-link-hover: #a4e5b7;
+  --auth-focus: rgba(83, 191, 120, 0.34);
+  --auth-green: #82d29a;
+  background: var(--auth-canvas);
 }
 
 .shell {
@@ -110,7 +51,7 @@
   border-radius: 24px;
   background: var(--auth-surface);
   box-shadow: 0 28px 80px rgba(22, 45, 44, 0.14), 0 3px 18px rgba(22, 45, 44, 0.06);
-  animation: surfaceEnter 620ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: surfaceEnter 180ms ease-out both;
 }
 
 :global(html.dark) .shell {
@@ -123,63 +64,62 @@
   isolation: isolate;
   min-height: 0;
   overflow: hidden;
-  background: #0e3036;
+  background: #0c3c31;
   color: #fff;
 }
 
 .coastline {
   object-fit: cover;
   object-position: 40% center;
-  transition: transform 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.shell:hover .coastline {
-  transform: scale(1.025);
+  transition: none;
 }
 
 .photoShade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(4, 25, 30, 0.43) 0%, rgba(6, 28, 34, 0.05) 35%, rgba(4, 26, 34, 0.42) 68%, rgba(3, 24, 32, 0.91) 100%);
+  background: linear-gradient(145deg, rgba(7, 54, 39, 0.48), rgba(4, 31, 29, 0.76));
 }
 
-.photoTopline {
+.photoPanel::after {
   position: absolute;
-  z-index: 1;
-  top: clamp(32px, 4vw, 54px);
-  left: clamp(32px, 4vw, 56px);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
-.photoTopline::before {
-  width: 25px;
-  height: 2px;
-  background: #95d5ac;
+  z-index: 2;
+  top: -18%;
+  right: -124px;
+  width: 250px;
+  height: 136%;
+  border-radius: 50%;
+  background: var(--auth-surface);
   content: "";
+  pointer-events: none;
 }
 
 .photoBody {
   position: absolute;
-  z-index: 1;
-  right: clamp(90px, 8vw, 124px);
+  z-index: 3;
+  right: clamp(120px, 14vw, 168px);
   bottom: clamp(32px, 4.5vw, 58px);
   left: clamp(32px, 4vw, 56px);
   max-width: 460px;
 }
 
-.photoEyebrow {
-  margin: 0 0 18px;
-  color: #b8e8d1;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.19em;
+.photoKicker {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  color: rgba(240, 250, 242, 0.84);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  line-height: 1.4;
   text-transform: uppercase;
+}
+
+.photoKicker::before {
+  width: 22px;
+  height: 1px;
+  background: #a9d8b7;
+  content: "";
 }
 
 .photoHeading {
@@ -200,14 +140,6 @@
   line-height: 1.65;
 }
 
-.photoRule {
-  display: block;
-  width: 45px;
-  height: 3px;
-  margin-top: 30px;
-  background: #9dd9a5;
-}
-
 .formPanel {
   position: relative;
   isolation: isolate;
@@ -215,38 +147,6 @@
   min-width: 0;
   padding: 28px clamp(34px, 4.2vw, 68px) 24px clamp(36px, 4.5vw, 72px);
   background: var(--auth-surface);
-}
-
-.curve {
-  position: absolute;
-  z-index: -1;
-  top: 0;
-  bottom: 0;
-  left: -133px;
-  width: 134px;
-  height: 100%;
-  fill: var(--auth-surface);
-  pointer-events: none;
-}
-
-.watermark {
-  position: absolute;
-  z-index: 0;
-  right: -145px;
-  bottom: -138px;
-  width: 440px;
-  height: 440px;
-  opacity: 0.035;
-  mix-blend-mode: multiply;
-  object-fit: contain;
-  pointer-events: none;
-  user-select: none;
-}
-
-:global(html.dark) .watermark {
-  filter: grayscale(1) invert(1);
-  mix-blend-mode: screen;
-  opacity: 0.035;
 }
 
 .formInner {
@@ -299,7 +199,7 @@
   width: 100%;
   margin-block: auto;
   padding-block: 28px 24px;
-  animation: contentEnter 550ms 110ms ease-out both;
+  animation: contentEnter 160ms ease-out both;
 }
 
 .eyebrow {
@@ -393,7 +293,7 @@
 }
 
 .input:focus-visible {
-  border-color: var(--auth-blue);
+  border-color: var(--auth-primary);
   box-shadow: 0 0 0 4px var(--auth-focus);
 }
 
@@ -497,27 +397,17 @@
 }
 
 .primaryButton {
-  border: 1px solid var(--auth-blue);
-  background: var(--auth-blue);
+  border: 1px solid var(--auth-primary);
+  background: var(--auth-primary);
   color: #fff;
-  box-shadow: 0 8px 20px rgba(18, 73, 189, 0.19);
+  box-shadow: 0 4px 10px rgba(16, 95, 46, 0.16);
 }
 
 .primaryButton:hover:not(:disabled) {
-  border-color: var(--auth-blue-hover);
-  background: var(--auth-blue-hover);
-  box-shadow: 0 10px 24px rgba(18, 73, 189, 0.26);
+  border-color: var(--auth-primary-hover);
+  background: var(--auth-primary-hover);
+  box-shadow: 0 5px 12px rgba(16, 95, 46, 0.2);
   transform: translateY(-1px);
-}
-
-:global(html.dark) .primaryButton {
-  border-color: #3467d6;
-  background: #3467d6;
-}
-
-:global(html.dark) .primaryButton:hover:not(:disabled) {
-  border-color: #2b59be;
-  background: #2b59be;
 }
 
 .primaryButton:active:not(:disabled),
@@ -651,11 +541,6 @@
     border-radius: 21px;
   }
 
-  .photoTopline {
-    top: 28px;
-    left: 36px;
-  }
-
   .photoBody {
     right: 95px;
     bottom: 32px;
@@ -666,18 +551,10 @@
     font-size: clamp(36px, 3.65vw, 50px);
   }
 
-  .photoEyebrow {
-    margin-bottom: 12px;
-  }
-
   .photoDescription {
     margin-top: 17px;
     font-size: 13px;
     line-height: 1.55;
-  }
-
-  .photoRule {
-    margin-top: 22px;
   }
 
   .formPanel {
@@ -777,26 +654,33 @@
   }
 
   .photoPanel {
-    min-height: 155px;
+    min-height: 240px;
   }
 
   .coastline {
     object-position: center 42%;
   }
 
-  .photoTopline {
-    top: 20px;
-    left: 30px;
-  }
-
   .photoBody {
-    right: 28px;
-    bottom: 18px;
+    top: 32px;
+    right: 24px;
+    bottom: auto;
     left: 30px;
   }
 
-  .photoEyebrow,
-  .photoRule,
+  .photoPanel::after {
+    top: auto;
+    right: -11%;
+    bottom: -136px;
+    width: 122%;
+    height: 230px;
+  }
+
+  .photoKicker {
+    margin-bottom: 10px;
+    font-size: 9px;
+  }
+
   .photoDescription {
     display: none;
   }
@@ -808,10 +692,6 @@
 
   .formPanel {
     padding: 24px clamp(23px, 7vw, 54px) 22px;
-  }
-
-  .curve {
-    display: none;
   }
 
   .formInner {
@@ -841,13 +721,6 @@
     font-size: 12px;
   }
 
-  .watermark {
-    right: -110px;
-    bottom: -112px;
-    width: 360px;
-    height: 360px;
-    opacity: 0.03;
-  }
 }
 
 @media (max-width: 480px) {
@@ -860,18 +733,11 @@
   }
 
   .photoPanel {
-    min-height: 150px;
-  }
-
-  .photoTopline {
-    top: 20px;
-    left: 23px;
-    font-size: 10px;
+    min-height: 250px;
   }
 
   .photoBody {
     right: 22px;
-    bottom: 18px;
     left: 23px;
   }
 
@@ -892,17 +758,21 @@
   }
 
   .photoPanel {
-    min-height: 120px;
-  }
-
-  .photoTopline {
-    top: 17px;
-    left: 22px;
+    min-height: 180px;
   }
 
   .photoBody {
-    bottom: 15px;
+    top: 23px;
     left: 22px;
+  }
+
+  .photoPanel::after {
+    bottom: -108px;
+    height: 160px;
+  }
+
+  .photoKicker {
+    margin-bottom: 8px;
   }
 
   .photoHeading {

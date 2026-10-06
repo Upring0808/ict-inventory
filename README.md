@@ -21,7 +21,7 @@ Run the full [`lib/supabase/schema.sql`](lib/supabase/schema.sql) script in Supa
 
 The script creates the two-account allowlist and activity log, removes previous equipment policies, permits database writes only for allowlisted signed-in users, and sets up the audit triggers. Equipment detail is read publicly through a server endpoint that returns one requested item; the equipment table itself is not readable with the public key.
 
-Run the full script again when updating an existing installation. It converts legacy text equipment IDs to UUIDs, repairs missing IDs, adds the ownership transfer function and custody history without deleting existing inventory, and updates transfer validation so the reason is optional. Apply the updated schema in Supabase for these database changes to take effect.
+Run the full script again when updating an existing installation, before deploying code that uses new database fields. It converts legacy text equipment IDs to UUIDs, repairs missing IDs, adds the ownership transfer function and custody history without deleting existing inventory, and updates transfer validation so the reason is optional. It also adds service-role-only session observations and connection snapshots to the activity log. Existing activity rows are not backfilled with IP or device information.
 
 ### 2. Configure Supabase Auth
 
@@ -74,9 +74,11 @@ Add the Supabase settings to the hosting environment, including Production and a
 - `/` is the authorized dashboard. Unauthenticated users see the sign-in screen.
 - `/verify?asset=…` and equipment QR codes remain public and read-only. Edit and QR verification controls appear only for an authorized signed-in user.
 - Equipment mutations are enforced by Supabase RLS. Local cache writes do not count as successful changes.
-- **Activity Log** records the user, action, equipment property number, changed fields, and timestamp. Equipment audit rows are written in the same database transaction as each equipment change.
+- **Activity Log** records the user, action, equipment property number, changed fields, and timestamp. Equipment audit rows are written in the same database transaction as each equipment change. Sign-in, connection change, and explicit sign-out events include the IP observed by the app server, an approximate IP-based location, and browser-reported device details. Equipment and account changes show the latest observation from that same session when it was checked within the preceding three minutes.
 - **Transfer ownership** records the former and new accountable officer and office, optional reason, acting account, server time, and a receipt ID. The equipment detail page shows its handoff history; the Activity Log keeps a separate transaction entry. Ordinary edits cannot change custody without a transfer.
-- **Settings** manages the two authorized account records, including names, optional usernames, and password resets.
+- **Settings** manages the two authorized account records, including names, optional usernames, and password resets. An account is shown as active after an authenticated app check within the past two minutes; **Last online** is the latest such check or explicit sign-out. Session tracking begins only after this schema and app version are deployed.
+
+On Vercel, the server takes the IP and city/country estimate from Vercel's request headers. Local development and hosts without trusted edge headers show IP and location as unavailable. IP geolocation is approximate, and browsers often do not disclose a specific device model. These values are observations for investigation, not precise physical location or a hardware identity guarantee.
 
 ## Checks
 

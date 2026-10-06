@@ -28,19 +28,36 @@ export async function GET(request: Request) {
     }
 
     const admin = createAdminClient();
-    let activityQuery = admin
-      .from('activity_log')
-      .select('id,actor_user_id,actor_name,actor_email,action,target_type,target_id,target_label,equipment_property_number,details,occurred_at');
-    if (from && to) activityQuery = activityQuery.gte('occurred_at', from.toISOString()).lt('occurred_at', to.toISOString());
-    // Fetch one extra row so pagination can determine whether more results exist
-    // without asking Postgres for an exact count of the full history.
-    const { data, error } = await activityQuery
-      .order('occurred_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(offset, offset + limit);
-    if (error) return Response.json({ error: 'Could not load the activity history.' }, { status: 503 });
+    let query = admin.from('activity_log')
+      .select('id,actor_user_id,actor_name,actor_email,action,target_type,target_id,target_label,equipment_property_number,details,occurred_at,session_id,connection_ip,connection_city,connection_region,connection_country,device_model,device_description,connection_observed_at');
+    if (from && to) query = query.gte('occurred_at', from.toISOString()).lt('occurred_at', to.toISOString());
+    // Fetch one extra row to determine whether more results exist.
+    const fullResult = await query.order('occurred_at', { ascending: false })
+      .order('id', { ascending: false }).range(offset, offset + limit);
+    let rows = fullResult.data || [];
+    let trackingAvailable = true;
+    if (fullResult.error?.code === '42703' || fullResult.error?.code === 'PGRST204') {
+      let legacyQuery = admin.from('activity_log')
+        .select('id,actor_user_id,actor_name,actor_email,action,target_type,target_id,target_label,equipment_property_number,details,occurred_at');
+      if (from && to) legacyQuery = legacyQuery.gte('occurred_at', from.toISOString()).lt('occurred_at', to.toISOString());
+      const legacyResult = await legacyQuery.order('occurred_at', { ascending: false })
+        .order('id', { ascending: false }).range(offset, offset + limit);
+      if (legacyResult.error) return Response.json({ error: 'Could not load the activity history.' }, { status: 503 });
+      rows = (legacyResult.data || []).map((event) => ({
+        ...event,
+        session_id: null,
+        connection_ip: null,
+        connection_city: null,
+        connection_region: null,
+        connection_country: null,
+        device_model: null,
+        device_description: null,
+        connection_observed_at: null,
+      }));
+      trackingAvailable = false;
+    }
+    if (fullResult.error && trackingAvailable) return Response.json({ error: 'Could not load the activity history.' }, { status: 503 });
 
-    const rows = data || [];
     const hasMore = rows.length > limit;
     const events = rows.slice(0, limit).map((event) => ({
       ...event,
@@ -49,7 +66,7 @@ export async function GET(request: Request) {
         : null,
     }));
     return Response.json(
-      { events, hasMore, limit, offset },
+      { events, hasMore, limit, offset, trackingAvailable },
       { headers: { 'Cache-Control': 'no-store' } }
     );
   } catch {

@@ -1,5 +1,7 @@
 import { createServerClient as createSupabaseServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getAuthorizedActor } from '@/lib/auth/server';
+import { recordAccountSession } from '@/lib/security/presence';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +42,21 @@ export async function GET(request: NextRequest) {
     if (error || !data.session) {
       console.error('Google OAuth code exchange failed:', error?.message || 'No session was returned.');
       return redirectAfterCallback(request, false, error?.name === 'AuthPKCECodeVerifierMissingError' ? 'browser' : 'google');
+    }
+
+    try {
+      const actor = await getAuthorizedActor(new Request(request.url, {
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      }));
+      if (actor) await recordAccountSession({
+        sessionId: actor.sessionId,
+        accountId: actor.accountId,
+        userId: actor.id,
+        name: actor.name,
+        email: actor.email,
+      }, request, 'signed_in');
+    } catch {
+      console.error('Could not record the Google sign-in session.');
     }
 
     return response;

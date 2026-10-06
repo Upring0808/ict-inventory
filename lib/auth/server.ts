@@ -18,7 +18,21 @@ export interface AuthorizedActor {
   name: string;
   avatarUrl: string | null;
   accountId: string;
+  sessionId: string | null;
   authUser: User;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function verifiedSessionId(token: string, userId: string): string | null {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')) as Record<string, unknown>;
+    return payload.sub === userId && typeof payload.session_id === 'string' && UUID_PATTERN.test(payload.session_id)
+      ? payload.session_id
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function requiredEnv(name: string, value: string | undefined): string {
@@ -182,6 +196,7 @@ export async function getAuthorizedActor(request: Request): Promise<AuthorizedAc
     name: account.full_name,
     avatarUrl,
     accountId: account.id,
+    sessionId: verifiedSessionId(token, user.id),
     authUser: user,
   };
 }

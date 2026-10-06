@@ -129,7 +129,7 @@ export function ScannerPage() {
       <div className="relative z-10 w-full px-4 pt-safe-top">
         <div className="mx-auto flex w-full max-w-lg items-center justify-between py-4">
           <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-green-600 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-700 text-white">
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h5v2H6v3H4V4Zm11 0h5v5h-2V6h-3V4ZM4 15h2v3h3v2H4v-5Zm14 0h2v5h-5v-2h3v-3ZM9 9h6v6H9V9Z" />
               </svg>

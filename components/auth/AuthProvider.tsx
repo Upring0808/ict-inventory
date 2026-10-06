@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { fetchAuthProfile, fetchWithTimeout, withDeadline } from '@/lib/auth/client';
+import { authorizedApiFetch, fetchAuthProfile, fetchWithTimeout, withDeadline } from '@/lib/auth/client';
 import { createBrowserClient } from '@/lib/supabase/client';
 
 export interface AuthProfile {
@@ -338,6 +338,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [clearGoogleLoading, readInitialSession, resolveNoSession, showUnavailable, verifySession]);
 
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let lastSentAt = 0;
+    const recordPresence = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastSentAt < 20_000) return;
+      lastSentAt = Date.now();
+      void authorizedApiFetch('/api/auth/presence', {
+        method: 'POST',
+        body: JSON.stringify({ event: 'seen' }),
+      }).catch(() => undefined);
+    };
+    recordPresence();
+    const interval = window.setInterval(recordPresence, 60_000);
+    window.addEventListener('focus', recordPresence);
+    document.addEventListener('visibilitychange', recordPresence);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', recordPresence);
+      document.removeEventListener('visibilitychange', recordPresence);
+    };
+  }, [status, profile?.id]);
+
   const retryAuthorization = useCallback(async () => {
     setError(null);
     changeStatus('loading');
@@ -479,6 +501,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const client = clientRef.current || createBrowserClient();
       clientRef.current = client;
+      const token = tokenRef.current;
+      if (token) {
+        await fetchWithTimeout('/api/auth/presence', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'ended' }),
+        }, 2_000).catch(() => undefined);
+      }
       const { error: signOutError } = await withDeadline(client.auth.signOut({ scope: 'local' }), 8_000);
       if (signOutError) throw signOutError;
       if (statusRef.current !== 'unauthenticated') await resolveNoSession(false);

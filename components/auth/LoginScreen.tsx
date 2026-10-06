@@ -104,16 +104,6 @@ export function LoginScreen({
 
   return (
     <main className={styles.canvas}>
-      <div className={styles.canvasIdentity} aria-hidden="true">
-        <Image
-          src="/brand/eco-inventory-mark.webp"
-          alt=""
-          width={680}
-          height={680}
-          loading="eager"
-          className={styles.canvasMark}
-        />
-      </div>
       <section className={styles.shell} aria-label="PENRO Batanes ICT Inventory">
         <aside className={styles.photoPanel} aria-label="About the inventory workspace">
           <Image
@@ -125,29 +115,14 @@ export function LoginScreen({
             className={styles.coastline}
           />
           <div className={styles.photoShade} aria-hidden="true" />
-          <p className={styles.photoTopline}>PENRO Batanes</p>
           <div className={styles.photoBody}>
-        
-            <p className={styles.photoHeading}>A clearer view of every asset.</p>
-            <p className={styles.photoDescription}>Track equipment with confidence and care for the resources behind every day of work.</p>
-            <span className={styles.photoRule} aria-hidden="true" />
+            
+            <p className={styles.photoHeading}>Equipment that stays accounted for.</p>
+            <p className={styles.photoDescription}>One shared record of ICT assets, their custodians, and the offices that rely on them.</p>
           </div>
         </aside>
 
         <div className={styles.formPanel}>
-          <svg className={styles.curve} viewBox="0 0 134 700" preserveAspectRatio="none" aria-hidden="true">
-            <path d="M134 0H112C100 75 39 145 57 215c16 62 78 98 73 166-6 77-76 104-79 178-3 66 31 108 77 141h6V0Z" />
-          </svg>
-          <Image
-            src="/brand/eco-inventory-mark.webp"
-            alt=""
-            width={440}
-            height={440}
-            loading="eager"
-            className={styles.watermark}
-            aria-hidden="true"
-          />
-
           <div className={styles.formInner}>
             <header>
               <AppBrand
@@ -160,7 +135,7 @@ export function LoginScreen({
 
             {view === 'sign-in' ? (
               <div className={styles.content}>
-                
+           
                 <h1 className={styles.heading}>Welcome back.</h1>
                 <p className={styles.subheading}>Sign in to manage ICT equipment and keep every record in view.</p>
 

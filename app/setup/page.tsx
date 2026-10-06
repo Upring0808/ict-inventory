@@ -45,7 +45,7 @@ export default function InitialSetupPage() {
     <main className="min-h-screen bg-zinc-100 px-4 py-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 sm:py-10">
       <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-5xl place-items-center">
         <section className="w-full max-w-2xl overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="bg-gradient-to-r from-green-700 to-blue-700 px-7 py-7 text-white sm:px-10">
+          <div className="bg-emerald-800 px-7 py-7 text-white sm:px-10">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/75">PENRO Batanes · ICT Inventory</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">Create the first authorized account</h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-white/80">This one-time setup is available only while no inventory account exists and requires the server setup key.</p>
@@ -57,7 +57,7 @@ export default function InitialSetupPage() {
                 <h2 className="font-semibold text-emerald-900 dark:text-emerald-100">First account created</h2>
                 <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">{invitationWarning ? 'The account is ready, but the email needs attention.' : 'The invitation email includes your temporary password and sign-in link. After signing in, open Settings to add the second authorized user.'}</p>
                 {invitationWarning && <p role="alert" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{invitationWarning}</p>}
-                <Link href="/" className="mt-4 inline-flex rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white">Continue to sign in</Link>
+                <Link href="/" className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800">Continue to sign in</Link>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
@@ -85,7 +85,7 @@ export default function InitialSetupPage() {
                 {error && <p role="alert" className="sm:col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">{error}</p>}
                 <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-5 dark:border-zinc-800">
                   <Link href="/" className="text-sm font-semibold text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100">Back to sign in</Link>
-                  <button type="submit" disabled={isSaving} className="rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{isSaving ? 'Creating and sending…' : 'Create account and send invitation'}</button>
+                  <button type="submit" disabled={isSaving} className="rounded-lg bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-zinc-900">{isSaving ? 'Creating and sending…' : 'Create account and send invitation'}</button>
                 </div>
               </form>
             )}

@@ -37,8 +37,6 @@ export function SummaryCards({
           />
         </svg>
       ),
-      color: 'from-blue-500/10 to-indigo-500/10 text-blue-600 dark:text-blue-400 border-blue-200/60 dark:border-blue-900/40',
-      activeBorder: 'border-blue-500 ring-2 ring-blue-500/20 dark:border-blue-400',
     }, 
     {
       id: 'Laptop Computers',
@@ -54,8 +52,6 @@ export function SummaryCards({
           />
         </svg>
       ),
-      color: 'from-indigo-500/10 to-purple-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200/60 dark:border-indigo-900/40',
-      activeBorder: 'border-indigo-500 ring-2 ring-indigo-500/20 dark:border-indigo-400',
     },
     {
       id: 'Printers',
@@ -71,8 +67,6 @@ export function SummaryCards({
           />
         </svg>
       ),
-      color: 'from-emerald-500/10 to-teal-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-900/40',
-      activeBorder: 'border-emerald-500 ring-2 ring-emerald-500/20 dark:border-emerald-400',
     },
     {
       id: 'Scanners',
@@ -88,8 +82,6 @@ export function SummaryCards({
           />
         </svg>
       ),
-      color: 'from-amber-500/10 to-orange-500/10 text-amber-600 dark:text-amber-400 border-amber-200/60 dark:border-amber-900/40',
-      activeBorder: 'border-amber-500 ring-2 ring-amber-500/20 dark:border-amber-400',
     },
   ];
 
@@ -193,18 +185,18 @@ export function SummaryCards({
               onClick={() => onSelectType(isSelected ? '' : card.id)}
               className={`group cursor-pointer rounded-2xl border p-4 transition-all ${
                 isSelected
-                  ? card.activeBorder + ' bg-white shadow-md dark:bg-zinc-900'
+                ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-white shadow-md dark:border-emerald-400 dark:bg-zinc-900'
                   : 'border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-xs dark:border-zinc-800 dark:bg-zinc-900'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div
-                  className={`flex h-8 w-8 items-center justify-center rounded-xl border bg-gradient-to-br ${card.color}`}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200/60 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300"
                 >
                   {card.icon}
                 </div>
                 {isSelected && (
-                  <span className="rounded-full bg-blue-600 px-1.5 py-0.2 text-[9px] font-bold text-white">
+                  <span className="rounded-full bg-emerald-700 px-1.5 py-0.2 text-[9px] font-bold text-white">
                     Active
                   </span>
                 )}

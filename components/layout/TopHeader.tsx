@@ -112,7 +112,12 @@ export function TopHeader({
 
           <div>
             <div className="flex items-center gap-2">
-              <AppBrand variant="mark" size={26} decorative />
+              <AppBrand
+                variant="mark"
+                size={26}
+                decorative
+                className="inline-flex shrink-0 lg:hidden"
+              />
               <h2 className="truncate text-xs font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-sm">
                 <span className="sm:hidden">ICT Inventory</span>
                 <span className="hidden sm:inline">{title}</span>
@@ -330,7 +335,7 @@ export function TopHeader({
                   className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-zinc-200 dark:ring-zinc-700"
                 />
               ) : (
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-green-600 to-blue-600 text-xs font-bold text-white shadow-xs">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-700 text-xs font-bold text-white shadow-xs">
                   {(profile?.name || profile?.email || 'U').trim().slice(0, 1).toUpperCase()}
                 </span>
               )}
@@ -347,7 +352,7 @@ export function TopHeader({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={profile.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-zinc-200 dark:ring-zinc-700" />
                   ) : (
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-green-600 to-blue-600 text-sm font-bold text-white">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-700 text-sm font-bold text-white">
                       {(profile?.name || profile?.email || 'U').trim().slice(0, 1).toUpperCase()}
                     </span>
                   )}

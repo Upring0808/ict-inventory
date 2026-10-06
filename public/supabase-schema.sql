@@ -58,10 +58,10 @@ begin
   end if;
 end;
 $equipment_id_migration$;
-    update public.equipment set id = gen_random_uuid() where id is null;
-    alter table public.equipment alter column id set default gen_random_uuid();
-    alter table public.equipment alter column id set not null;
-    create unique index if not exists idx_equipment_id_unique on public.equipment (id);
+update public.equipment set id = gen_random_uuid() where id is null;
+alter table public.equipment alter column id set default gen_random_uuid();
+alter table public.equipment alter column id set not null;
+create unique index if not exists idx_equipment_id_unique on public.equipment (id);
 
 -- Migration-safe additions for existing inventory tables.
 alter table public.equipment add column if not exists last_verified_at timestamptz;
@@ -107,15 +107,47 @@ create table if not exists public.activity_log (
   occurred_at timestamptz not null default timezone('utc'::text, now())
 );
 
+-- Connection details are observations made by the application server. They
+-- are copied into audit rows only when the same Auth session was seen recently.
+alter table public.activity_log add column if not exists session_id uuid;
+alter table public.activity_log add column if not exists connection_ip inet;
+alter table public.activity_log add column if not exists connection_city text;
+alter table public.activity_log add column if not exists connection_region text;
+alter table public.activity_log add column if not exists connection_country text;
+alter table public.activity_log add column if not exists device_model text;
+alter table public.activity_log add column if not exists device_description text;
+alter table public.activity_log add column if not exists connection_observed_at timestamptz;
+
+create table if not exists public.account_sessions (
+  session_id uuid primary key,
+  account_id uuid not null references public.authorized_accounts(id) on delete cascade,
+  auth_user_id uuid not null,
+  first_seen_at timestamptz not null default timezone('utc'::text, now()),
+  last_seen_at timestamptz not null default timezone('utc'::text, now()),
+  ended_at timestamptz,
+  ip_address inet,
+  city text,
+  region text,
+  country text,
+  device_model text,
+  device_description text,
+  user_agent text
+);
+
 create index if not exists idx_activity_log_occurred_at on public.activity_log (occurred_at desc);
 create index if not exists idx_activity_log_equipment on public.activity_log (equipment_property_number, occurred_at desc);
+create index if not exists idx_activity_log_session on public.activity_log (session_id, occurred_at desc);
+create index if not exists idx_account_sessions_account_seen on public.account_sessions (account_id, last_seen_at desc);
 
 alter table public.authorized_accounts enable row level security;
 alter table public.activity_log enable row level security;
+alter table public.account_sessions enable row level security;
 revoke all on public.authorized_accounts from anon, authenticated;
 revoke all on public.activity_log from anon, authenticated;
+revoke all on public.account_sessions from anon, authenticated;
 grant all on public.authorized_accounts to service_role;
 grant all on public.activity_log to service_role;
+grant all on public.account_sessions to service_role;
 
 create or replace function public.is_authorized_inventory_user()
 returns boolean
@@ -165,6 +197,8 @@ declare
   v_actor_id text := nullif(current_setting('app.actor_user_id', true), '');
   v_actor_name text := coalesce(nullif(current_setting('app.actor_name', true), ''), 'System');
   v_actor_email text := coalesce(nullif(current_setting('app.actor_email', true), ''), 'system');
+  v_session_id text := nullif(current_setting('app.session_id', true), '');
+  v_connection public.account_sessions%rowtype;
   v_action text;
   v_target_id uuid;
   v_target_label text;
@@ -204,9 +238,19 @@ begin
     v_details := jsonb_build_object('name', old.full_name, 'username', old.username);
   end if;
 
+  if v_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    select * into v_connection from public.account_sessions
+    where session_id = v_session_id::uuid
+      and auth_user_id = v_actor_id::uuid
+      and ended_at is null
+      and last_seen_at >= now() - interval '3 minutes';
+  end if;
+
   insert into public.activity_log (
     actor_user_id, actor_name, actor_email, action, target_type,
-    target_id, target_label, details
+    target_id, target_label, details, session_id, connection_ip,
+    connection_city, connection_region, connection_country,
+    device_model, device_description, connection_observed_at
   ) values (
     case when v_actor_id ~* '^[0-9a-f-]{36}$' then v_actor_id::uuid else null end,
     v_actor_name,
@@ -215,7 +259,11 @@ begin
     'account',
     v_target_id,
     v_target_label,
-    v_details
+    v_details,
+    case when v_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then v_session_id::uuid else null end,
+    v_connection.ip_address, v_connection.city, v_connection.region,
+    v_connection.country, v_connection.device_model,
+    v_connection.device_description, v_connection.last_seen_at
   );
 
   if tg_op = 'DELETE' then return old; end if;
@@ -238,7 +286,8 @@ create or replace function public.manage_authorized_account(
   p_actor_user_id uuid,
   p_actor_email text,
   p_actor_name text,
-  p_password_updated boolean default false
+  p_password_updated boolean,
+  p_session_id uuid
 )
 returns uuid
 language plpgsql
@@ -252,6 +301,7 @@ begin
   perform set_config('app.actor_user_id', coalesce(p_actor_user_id::text, ''), true);
   perform set_config('app.actor_email', coalesce(p_actor_email, ''), true);
   perform set_config('app.actor_name', coalesce(p_actor_name, ''), true);
+  perform set_config('app.session_id', coalesce(p_session_id::text, ''), true);
 
   if p_operation = 'create' then
     insert into public.authorized_accounts (
@@ -293,8 +343,113 @@ begin
 end;
 $$;
 
-revoke all on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean) from public, anon, authenticated;
-grant execute on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean) to service_role;
+revoke all on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean, uuid) from public, anon, authenticated;
+grant execute on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean, uuid) to service_role;
+
+-- Only the authenticated Next.js route calls this service-role function. It
+-- records an observation, not a claim that an inventory action used this IP.
+create or replace function public.record_account_session(
+  p_session_id uuid,
+  p_account_id uuid,
+  p_auth_user_id uuid,
+  p_actor_name text,
+  p_actor_email text,
+  p_event text,
+  p_ip_address inet,
+  p_city text,
+  p_region text,
+  p_country text,
+  p_device_model text,
+  p_device_description text,
+  p_user_agent text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_previous public.account_sessions%rowtype;
+  v_exists boolean;
+  v_action text;
+  v_now timestamptz := timezone('utc'::text, now());
+begin
+  if p_event not in ('signed_in', 'seen', 'ended') then
+    raise exception using errcode = '22023', message = 'Invalid session event.';
+  end if;
+  if not exists (
+    select 1 from public.authorized_accounts
+    where id = p_account_id and auth_user_id = p_auth_user_id
+      and lower(email) = lower(p_actor_email)
+  ) then
+    raise exception using errcode = '42501', message = 'Session account is not authorized.';
+  end if;
+
+  perform pg_advisory_xact_lock(706091204, hashtext(p_session_id::text));
+  select * into v_previous from public.account_sessions
+  where session_id = p_session_id for update;
+  v_exists := found;
+
+  if not v_exists then
+    insert into public.account_sessions (
+      session_id, account_id, auth_user_id, first_seen_at, last_seen_at,
+      ended_at, ip_address, city, region, country, device_model,
+      device_description, user_agent
+    ) values (
+      p_session_id, p_account_id, p_auth_user_id, v_now, v_now,
+      case when p_event = 'ended' then v_now else null end,
+      p_ip_address, p_city, p_region, p_country, p_device_model,
+      p_device_description, p_user_agent
+    );
+    v_action := case
+      when p_event = 'ended' then 'auth.signed_out'
+      when p_event = 'signed_in' then 'auth.signed_in'
+      else 'auth.session_observed'
+    end;
+  elsif v_previous.ended_at is not null then
+    return;
+  else
+    if p_event = 'ended' then
+      v_action := 'auth.signed_out';
+    elsif v_previous.ip_address is distinct from p_ip_address
+      or v_previous.city is distinct from p_city
+      or v_previous.region is distinct from p_region
+      or v_previous.country is distinct from p_country
+      or v_previous.device_model is distinct from p_device_model
+      or v_previous.device_description is distinct from p_device_description then
+      v_action := 'auth.connection_changed';
+    end if;
+    update public.account_sessions
+    set last_seen_at = v_now,
+        ended_at = case when p_event = 'ended' then v_now else null end,
+        ip_address = p_ip_address,
+        city = p_city,
+        region = p_region,
+        country = p_country,
+        device_model = p_device_model,
+        device_description = p_device_description,
+        user_agent = p_user_agent
+    where session_id = p_session_id;
+  end if;
+
+  if v_action is not null then
+    insert into public.activity_log (
+      actor_user_id, actor_name, actor_email, action, target_type,
+      target_label, details, session_id, connection_ip, connection_city,
+      connection_region, connection_country, device_model,
+      device_description, connection_observed_at
+    ) values (
+      p_auth_user_id, p_actor_name, lower(p_actor_email), v_action, 'session',
+      'Sign-in session', jsonb_build_object('session', left(p_session_id::text, 8)),
+      p_session_id, p_ip_address, p_city, p_region, p_country,
+      p_device_model, p_device_description, v_now
+    );
+  end if;
+end;
+$$;
+
+revoke all on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text) from public, anon, authenticated;
+grant execute on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text) to service_role;
 
 -- Custody is changed only by the transfer function below. Direct updates must
 -- not silently rewrite the custodian or the receipt history.
@@ -412,6 +567,8 @@ as $$
 declare
   v_actor_email text := coalesce(nullif(lower(auth.jwt() ->> 'email'), ''), 'system');
   v_actor_id uuid := auth.uid();
+  v_session_id text := auth.jwt() ->> 'session_id';
+  v_connection public.account_sessions%rowtype;
   v_actor_name text;
   v_action text;
   v_target_id uuid;
@@ -463,9 +620,19 @@ begin
     v_details := jsonb_build_object('record', 'Equipment removed from inventory');
   end if;
 
+  if v_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    select * into v_connection from public.account_sessions
+    where session_id = v_session_id::uuid
+      and auth_user_id = v_actor_id
+      and ended_at is null
+      and last_seen_at >= now() - interval '3 minutes';
+  end if;
+
   insert into public.activity_log (
     actor_user_id, actor_name, actor_email, action, target_type,
-    target_id, target_label, equipment_property_number, details
+    target_id, target_label, equipment_property_number, details,
+    session_id, connection_ip, connection_city, connection_region,
+    connection_country, device_model, device_description, connection_observed_at
   ) values (
     v_actor_id,
     v_actor_name,
@@ -475,7 +642,11 @@ begin
     v_target_id,
     v_property_number,
     v_property_number,
-    v_details
+    v_details,
+    case when v_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then v_session_id::uuid else null end,
+    v_connection.ip_address, v_connection.city, v_connection.region,
+    v_connection.country, v_connection.device_model,
+    v_connection.device_description, v_connection.last_seen_at
   );
 
   if tg_op = 'DELETE' then return old; end if;

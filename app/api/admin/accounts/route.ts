@@ -15,6 +15,21 @@ export const dynamic = 'force-dynamic';
 const MAX_ACCOUNTS = 2;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,32}$/;
 
+function missingSecuritySchema(code: string | undefined) {
+  return code === 'PGRST205' || code === '42P01';
+}
+
+async function manageAccount(
+  admin: ReturnType<typeof createAdminClient>,
+  params: Record<string, unknown>,
+) {
+  const result = await admin.rpc('manage_authorized_account', params);
+  if (result.error?.code !== 'PGRST202') return result;
+  const legacyParams = { ...params };
+  delete legacyParams.p_session_id;
+  return admin.rpc('manage_authorized_account', legacyParams);
+}
+
 function unauthorized() {
   return Response.json({ error: 'Sign in with an authorized account to continue.' }, { status: 401 });
 }
@@ -29,11 +44,35 @@ export async function GET(request: Request) {
     const actor = await getAuthorizedActor(request);
     if (!actor) return unauthorized();
 
-    const { data, error } = await createAdminClient()
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from('authorized_accounts')
       .select('id,email,username,full_name,created_at')
       .order('created_at', { ascending: true });
     if (error) return Response.json({ error: 'Could not load authorized accounts.' }, { status: 503 });
+
+    const accountIds = (data || []).map((account) => account.id);
+    const activeSince = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const [activeResult, latestResults] = await Promise.all([
+      admin.from('account_sessions')
+        .select('account_id')
+        .in('account_id', accountIds)
+        .is('ended_at', null)
+        .gte('last_seen_at', activeSince),
+      Promise.all(accountIds.map((id) => admin.from('account_sessions')
+        .select('last_seen_at,ip_address,city,region,country,device_model,device_description')
+        .eq('account_id', id)
+        .order('last_seen_at', { ascending: false })
+        .limit(1)
+        .maybeSingle())),
+    ]);
+    const securityErrors = [activeResult.error, ...latestResults.map((result) => result.error)].filter((queryError) => queryError !== null);
+    if (securityErrors.some((queryError) => !missingSecuritySchema(queryError.code))) {
+      return Response.json({ error: 'Could not load account presence. Apply the latest Supabase schema if this feature is new.' }, { status: 503 });
+    }
+    const trackingAvailable = securityErrors.length === 0;
+    const activeIds = new Set((activeResult.data || []).map((session) => session.account_id));
+    const latestById = new Map(accountIds.map((id, index) => [id, latestResults[index].data]));
 
     return Response.json(
       {
@@ -44,8 +83,19 @@ export async function GET(request: Request) {
           name: account.full_name,
           createdAt: account.created_at,
           isCurrentUser: account.id === actor.accountId,
+          isActive: trackingAvailable && activeIds.has(account.id),
+          lastOnline: latestById.get(account.id)?.last_seen_at ?? null,
+          lastConnection: latestById.get(account.id) ? {
+            ipAddress: latestById.get(account.id)?.ip_address ?? null,
+            city: latestById.get(account.id)?.city ?? null,
+            region: latestById.get(account.id)?.region ?? null,
+            country: latestById.get(account.id)?.country ?? null,
+            deviceModel: latestById.get(account.id)?.device_model ?? null,
+            deviceDescription: latestById.get(account.id)?.device_description ?? null,
+          } : null,
         })),
         limit: MAX_ACCOUNTS,
+        trackingAvailable,
       },
       { headers: { 'Cache-Control': 'no-store' } }
     );
@@ -114,7 +164,7 @@ export async function POST(request: Request) {
     }
 
     const { user: authUser, created: createdAuthUser } = await createOrUpdateAuthUser(email, password, name);
-    const { error } = await admin.rpc('manage_authorized_account', {
+    const { error } = await manageAccount(admin, {
       p_operation: 'create',
       p_id: null,
       p_email: email,
@@ -125,6 +175,7 @@ export async function POST(request: Request) {
       p_actor_email: actor.email,
       p_actor_name: actor.name,
       p_password_updated: false,
+      p_session_id: actor.sessionId,
     });
 
     if (error) {
@@ -233,7 +284,7 @@ export async function PATCH(request: Request) {
       }
     }
 
-    const saveAccount = (passwordUpdated: boolean) => admin.rpc('manage_authorized_account', {
+    const saveAccount = (passwordUpdated: boolean) => manageAccount(admin, {
       p_operation: 'update',
       p_id: id,
       p_email: email,
@@ -244,6 +295,7 @@ export async function PATCH(request: Request) {
       p_actor_email: actor.email,
       p_actor_name: actor.name,
       p_password_updated: passwordUpdated,
+      p_session_id: actor.sessionId,
     });
     const restoreSignInEmail = async () => {
       if (!emailChanged || !account.auth_user_id) return true;
@@ -342,7 +394,7 @@ export async function DELETE(request: Request) {
       return Response.json({ error: 'You can only remove your own account.' }, { status: 403 });
     }
 
-    const { error } = await admin.rpc('manage_authorized_account', {
+    const { error } = await manageAccount(admin, {
       p_operation: 'delete',
       p_id: id,
       p_email: account.email,
@@ -353,6 +405,7 @@ export async function DELETE(request: Request) {
       p_actor_email: actor.email,
       p_actor_name: actor.name,
       p_password_updated: false,
+      p_session_id: actor.sessionId,
     });
     if (error) {
       const lastAccount = error.message.includes('At least one authorized account must remain');

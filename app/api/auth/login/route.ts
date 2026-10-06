@@ -4,7 +4,9 @@ import {
   ensureAuthorizedIdentityLink,
   normalizeEmail,
   normalizeUsername,
+  verifiedSessionId,
 } from '@/lib/auth/server';
+import { recordAccountSession } from '@/lib/security/presence';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +70,18 @@ export async function POST(request: Request) {
       ? metadata.avatar_url
       : typeof metadata?.picture === 'string' ? metadata.picture : null;
 
+    try {
+      await recordAccountSession({
+        sessionId: verifiedSessionId(data.session.access_token, data.user.id),
+        accountId: account.id,
+        userId: data.user.id,
+        name: account.full_name,
+        email: normalizeEmail(data.user.email),
+      }, request, 'signed_in');
+    } catch {
+      console.error('Could not record the password sign-in session.');
+    }
+
     return Response.json(
       {
         access_token: data.session.access_token,
@@ -79,7 +93,7 @@ export async function POST(request: Request) {
           avatarUrl,
         },
       },
-      { headers: { 'Cache-Control': 'no-store' } }
+      { headers: { 'Cache-Control': 'no-store', 'Accept-CH': 'Sec-CH-UA-Model, Sec-CH-UA-Platform, Sec-CH-UA-Mobile' } }
     );
   } catch (error) {
     console.error('Password sign-in route could not reach Supabase:', error instanceof Error ? error.message : 'Unknown error');

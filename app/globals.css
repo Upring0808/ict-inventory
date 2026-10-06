@@ -24,14 +24,6 @@
   --background: #f8fafc;
   --foreground: #09090b;
 
-  /* Green-Blue brand tokens */
-  --brand-green: #16a34a;
-  --brand-green-light: #22c55e;
-  --brand-blue: #2563eb;
-  --brand-blue-light: #3b82f6;
-  --brand-gradient: linear-gradient(135deg, #16a34a 0%, #2563eb 100%);
-  --brand-gradient-subtle: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%);
-
   /* Elevation shadows — adds depth and contrast */
   --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.12), 0 2px 6px -1px rgb(0 0 0 / 0.08);
@@ -48,7 +40,6 @@ html.dark {
   /* Neutral charcoal surfaces modelled after mature messaging and workspace apps. */
   --background: #202124;
   --foreground: #e8eaed;
-  --brand-gradient-subtle: linear-gradient(135deg, #243129 0%, #263342 100%);
   --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.24), 0 1px 2px -1px rgb(0 0 0 / 0.18);
   --shadow-card-hover: 0 6px 16px 0 rgb(0 0 0 / 0.28), 0 2px 6px -1px rgb(0 0 0 / 0.18);
   --shadow-modal: 0 20px 60px -12px rgb(0 0 0 / 0.5), 0 8px 20px -4px rgb(0 0 0 / 0.25);
@@ -174,10 +165,7 @@ body {
 
 /* Sidebar nav item smooth active transition */
 .nav-item {
-  transition: background 200ms var(--ease-out-quart), color 150ms ease, transform 150ms var(--ease-spring);
-}
-.nav-item:hover {
-  transform: translateX(2px);
+  transition: background-color 150ms var(--ease-out-quart), color 150ms ease;
 }
 
 .sidebar-shell {
@@ -221,15 +209,6 @@ html.dark ::-webkit-scrollbar-thumb { background: #334155; }
   transition: box-shadow 0.15s ease, transform 0.18s var(--ease-spring);
 }
 .card:hover { box-shadow: var(--shadow-card-hover); }
-
-/* Brand gradient utility */
-.brand-gradient { background: var(--brand-gradient); }
-.brand-gradient-text {
-  background: var(--brand-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
 
 /* Table row hover */
 table tbody tr {

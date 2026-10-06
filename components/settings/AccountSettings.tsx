@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { authorizedApiFetch, readApiError } from '@/lib/auth/client';
+import { formatApproximateLocation, formatSecurityTime } from '@/lib/security/format';
 
 interface AuthorizedAccount {
   id: string;
@@ -11,6 +12,16 @@ interface AuthorizedAccount {
   name: string;
   createdAt: string;
   isCurrentUser: boolean;
+  isActive: boolean;
+  lastOnline: string | null;
+  lastConnection: {
+    ipAddress: string | null;
+    city: string | null;
+    region: string | null;
+    country: string | null;
+    deviceModel: string | null;
+    deviceDescription: string | null;
+  } | null;
 }
 
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,32}$/i;
@@ -21,23 +32,25 @@ export function AccountSettings() {
   const { signOut } = useAuth();
   const [accounts, setAccounts] = useState<AuthorizedAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [trackingAvailable, setTrackingAvailable] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
-  const loadAccounts = useCallback(async () => {
-    setIsLoading(true);
+  const loadAccounts = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setError(null);
     try {
       const response = await authorizedApiFetch('/api/admin/accounts');
       if (!response.ok) throw new Error(await readApiError(response, 'Could not load authorized accounts.'));
-      const result = await response.json() as { accounts: AuthorizedAccount[] };
+      const result = await response.json() as { accounts: AuthorizedAccount[]; trackingAvailable?: boolean };
       setAccounts(result.accounts);
+      setTrackingAvailable(result.trackingAvailable !== false);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load authorized accounts.');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, []);
 
@@ -45,6 +58,13 @@ export function AccountSettings() {
     const timer = window.setTimeout(() => { void loadAccounts(); }, 0);
     return () => window.clearTimeout(timer);
   }, [loadAccounts]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && !busyId) void loadAccounts(true);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [busyId, loadAccounts]);
 
   const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -198,13 +218,13 @@ export function AccountSettings() {
         <p className="mt-1.5 max-w-2xl text-sm leading-5 text-zinc-600 dark:text-zinc-400">Manage the two named people who can access the inventory dashboard.</p>
       </header>
 
-      <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50/90 to-green-50/70 p-4 shadow-sm dark:border-blue-900/50 dark:from-blue-950/35 dark:to-green-950/20 sm:p-5">
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/50 sm:p-5">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Authorized user accounts</p>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-zinc-600 dark:text-zinc-300">Both accounts have the same access. Google sign-in is available only for these email addresses.</p>
           </div>
-          <span className="shrink-0 rounded-xl border border-blue-200/80 bg-white/90 px-3 py-2 text-center text-xs font-bold text-blue-800 shadow-sm dark:border-blue-800 dark:bg-zinc-900 dark:text-blue-200"><span className="block text-base leading-5">{accounts.length}<span className="font-medium text-zinc-400 dark:text-zinc-500"> / 2</span></span><span className="text-[10px] font-semibold uppercase tracking-wide">accounts</span></span>
+          <span className="shrink-0 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-center text-xs font-bold text-zinc-800 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"><span className="block text-base leading-5">{accounts.length}<span className="font-medium text-zinc-400 dark:text-zinc-500"> / 2</span></span><span className="text-[10px] font-semibold uppercase tracking-wide">accounts</span></span>
         </div>
       </div>
 
@@ -213,6 +233,7 @@ export function AccountSettings() {
           {error || warning || success}
         </div>
       )}
+      {!trackingAvailable && !error ? <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">Active status and last online will appear after the updated Supabase schema is applied.</p> : null}
 
       <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
@@ -240,6 +261,27 @@ export function AccountSettings() {
                       {isCurrentUser && (
                         <button type="button" onClick={() => void handleDelete(account)} disabled={busyId === account.id || accounts.length <= 1} title={accounts.length <= 1 ? 'At least one authorized account must remain.' : 'Remove your account'} className="min-h-10 shrink-0 rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-500/15 disabled:cursor-not-allowed disabled:opacity-40 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-300 dark:hover:bg-red-950/30">Remove</button>
                       )}
+                    </div>
+                    <div className="mb-4 grid gap-3 rounded-xl border border-zinc-200 bg-white/70 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900/60 sm:grid-cols-2">
+                      <div>
+                        <span className="block text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Status</span>
+                        <span className={`mt-1 inline-flex items-center gap-1.5 font-semibold ${account.isActive ? 'text-emerald-700 dark:text-emerald-300' : 'text-zinc-600 dark:text-zinc-300'}`}>
+                          <span className={`h-2 w-2 rounded-full ${account.isActive ? 'bg-emerald-500' : 'bg-zinc-400'}`} aria-hidden="true" />
+                          {!trackingAvailable ? 'Tracking setup needed' : account.isActive ? 'Active now' : account.lastOnline ? 'Not active' : 'Not recorded yet'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Last online</span>
+                        {trackingAvailable && account.lastOnline ? <time dateTime={account.lastOnline} className="mt-1 block font-medium text-zinc-800 dark:text-zinc-200">{formatSecurityTime(account.lastOnline)}</time> : <span className="mt-1 block text-zinc-500 dark:text-zinc-400">{trackingAvailable ? 'Not recorded yet' : 'Requires schema update'}</span>}
+                      </div>
+                      <p className="text-[11px] leading-4 text-zinc-500 dark:text-zinc-400 sm:col-span-2">Active means this account was seen in the app within the past two minutes.</p>
+                      {account.lastConnection ? (
+                        <div className="border-t border-zinc-200 pt-3 dark:border-zinc-800 sm:col-span-2">
+                          <span className="block text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Most recent connection</span>
+                          <p className="mt-1 break-words text-zinc-700 dark:text-zinc-300">IP: {account.lastConnection.ipAddress || 'Unavailable'} · {formatApproximateLocation(account.lastConnection.city, account.lastConnection.country)}</p>
+                          <p className="mt-0.5 break-words text-zinc-600 dark:text-zinc-400">Model: {account.lastConnection.deviceModel || 'Unavailable'} · {account.lastConnection.deviceDescription || 'Device unavailable'}</p>
+                        </div>
+                      ) : null}
                     </div>
                     {isCurrentUser ? (
                       <form onSubmit={(event) => void handleUpdate(event, account)}>
@@ -282,7 +324,7 @@ export function AccountSettings() {
               <label className={labelClassName}>Email address<input name="email" type="email" autoComplete="email" required className={inputClassName} /></label>
               <label className={labelClassName}>Username <span className="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span><input name="username" autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" className={inputClassName} /></label>
               <label className={labelClassName}>Temporary password<input name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} className={inputClassName} /><span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">At least 12 characters. This password will be included in the invitation email; the recipient can change it after signing in.</span></label>
-              <button type="submit" disabled={busyId === 'new'} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-green-600 to-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:from-green-700 hover:to-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/25 disabled:cursor-not-allowed disabled:opacity-60">{busyId === 'new' ? 'Creating and sending…' : 'Create account and send invitation'}</button>
+              <button type="submit" disabled={busyId === 'new'} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-zinc-900">{busyId === 'new' ? 'Creating and sending…' : 'Create account and send invitation'}</button>
             </form>
           )}
         </section>
