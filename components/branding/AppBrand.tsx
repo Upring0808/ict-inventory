@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import type { CSSProperties } from 'react';
 
 export interface AppBrandProps {
@@ -42,22 +43,15 @@ function BrandMark({
       role={role}
       aria-label={ariaLabel}
     >
-      <svg
-        className="block h-full w-full"
-        viewBox="0 0 48 48"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        focusable="false"
+      <Image
+        src="/brand/eco-inventory-mark.webp"
+        alt=""
+        width={size ?? 48}
+        height={size ?? 48}
+        loading="eager"
+        className="block h-full w-full object-contain"
         aria-hidden="true"
-      >
-        <rect x="2" y="2" width="44" height="44" rx="13" fill="#123640" />
-        <rect x="8" y="8" width="32" height="8" rx="2.5" fill="#F8FAFC" />
-        <rect x="8" y="20" width="32" height="8" rx="2.5" fill="#F8FAFC" />
-        <rect x="8" y="32" width="32" height="8" rx="2.5" fill="#16A34A" />
-        <rect x="14" y="10.5" width="8" height="3" rx="1.5" fill="#123640" />
-        <rect x="14" y="22.5" width="8" height="3" rx="1.5" fill="#123640" />
-        <rect x="14" y="34.5" width="8" height="3" rx="1.5" fill="#123640" />
-      </svg>
+      />
     </span>
   );
 }

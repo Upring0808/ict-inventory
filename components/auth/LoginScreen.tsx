@@ -106,7 +106,7 @@ export function LoginScreen({
     <main className={styles.canvas}>
       <div className={styles.canvasIdentity} aria-hidden="true">
         <Image
-          src="/auth/penro-batanes-mark.png"
+          src="/brand/eco-inventory-mark.webp"
           alt=""
           width={680}
           height={680}
@@ -139,7 +139,7 @@ export function LoginScreen({
             <path d="M134 0H112C100 75 39 145 57 215c16 62 78 98 73 166-6 77-76 104-79 178-3 66 31 108 77 141h6V0Z" />
           </svg>
           <Image
-            src="/auth/penro-batanes-mark.png"
+            src="/brand/eco-inventory-mark.webp"
             alt=""
             width={440}
             height={440}
