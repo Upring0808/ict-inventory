@@ -57,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const operationRef = useRef(0);
   const signInAttemptRef = useRef(0);
   const tokenRef = useRef<string | null>(null);
+  const googleSignInInProgressRef = useRef(false);
   const pendingPasswordRef = useRef<PendingPasswordSession | null>(null);
   const pendingLoginErrorRef = useRef<string | null>(null);
   const profileRef = useRef<AuthProfile | null>(null);
@@ -143,6 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [changeStatus, clearGoogleLoading, showUnavailable]);
 
   const verifySession = useCallback(async (session: Session, force = false) => {
+    if (googleSignInInProgressRef.current) return;
     setHasSession(true);
     const pending = pendingPasswordRef.current;
     if (pending?.accessToken === session.access_token && pending.profile.id === session.user.id) {
@@ -274,6 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Mobile Safari may restore the pre-OAuth login document from its
       // back/forward cache. Its React state is stale, so reconcile it with the
       // Supabase session saved by the callback before leaving the login screen.
+      googleSignInInProgressRef.current = false;
       recheckOnResume();
     };
     const handleVisibilityChange = () => {
@@ -404,15 +407,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [acceptSession, showUnavailable]);
 
   const signInWithGoogle = useCallback(async () => {
-    ++signInAttemptRef.current;
+    const attempt = ++signInAttemptRef.current;
+    ++operationRef.current;
+    googleSignInInProgressRef.current = true;
     pendingLoginErrorRef.current = null;
     takeLoginError();
     setError(null);
     clearGoogleLoading();
     setLoadingMethod('google');
+    tokenRef.current = null;
+    pendingPasswordRef.current = null;
+    profileRef.current = null;
+    setProfile(null);
+    setHasSession(false);
+    changeStatus('unauthenticated');
     try {
       const client = clientRef.current || createBrowserClient();
       clientRef.current = client;
+
+      // A login screen can be restored from mobile browser history with an old
+      // local session still cached. Clear it before choosing a Google identity
+      // so the callback cannot leave the previous account active.
+      const { data: sessionData, error: sessionReadError } = await withDeadline(client.auth.getSession(), 10_000);
+      if (sessionReadError) throw sessionReadError;
+      if (sessionData.session) {
+        const { error: signOutError } = await withDeadline(
+          client.auth.signOut({ scope: 'local' }),
+          8_000
+        );
+        if (signOutError) throw signOutError;
+      }
+      if (attempt !== signInAttemptRef.current) return;
+
+      tokenRef.current = null;
+      pendingPasswordRef.current = null;
+      profileRef.current = null;
+      setProfile(null);
+      setHasSession(false);
+      if (statusRef.current !== 'unauthenticated') changeStatus('unauthenticated');
+      setLoadingMethod('google');
+
       const { data, error: oauthError } = await withDeadline(client.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -421,18 +455,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           skipBrowserRedirect: true,
         },
       }), 10_000);
+      if (attempt !== signInAttemptRef.current) return;
       if (oauthError) throw oauthError;
       if (!data.url) throw new Error('Google sign-in could not be started. Please try again.');
       window.location.replace(data.url);
     } catch (oauthError) {
+      if (attempt !== signInAttemptRef.current) return;
+      googleSignInInProgressRef.current = false;
       setError(oauthError instanceof Error ? oauthError.message : 'Google sign-in could not be started.');
       clearGoogleLoading();
     }
-  }, [clearGoogleLoading]);
+  }, [changeStatus, clearGoogleLoading]);
 
   const signOut = useCallback(async () => {
     ++signInAttemptRef.current;
     ++operationRef.current;
+    googleSignInInProgressRef.current = false;
     pendingPasswordRef.current = null;
     clearGoogleLoading();
     profileRef.current = null;

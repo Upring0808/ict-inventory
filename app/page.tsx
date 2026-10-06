@@ -29,6 +29,7 @@ import { EquipmentDetailDrawer } from '@/components/inventory/EquipmentDetailDra
 import { SqlSchemaModal } from '@/components/inventory/SqlSchemaModal';
 import { DeleteConfirmModal } from '@/components/inventory/DeleteConfirmModal';
 import { PrintReport } from '@/components/inventory/PrintReport';
+import { useDashboardBackNavigation } from '@/components/layout/useDashboardBackNavigation';
 
 function isEquipmentVerified(item: InventoryItem): boolean {
   return Boolean(item.lastVerifiedAt);
@@ -373,7 +374,7 @@ function InventoryDashboardContent() {
     setDetailItem(item);
   };
 
-  const handleCloseDetails = () => {
+  const handleCloseDetails = useCallback(() => {
     const itemId = detailItem?.id;
     setDetailItem(null);
     window.requestAnimationFrame(() => {
@@ -385,7 +386,23 @@ function InventoryDashboardContent() {
       else if (detailOrigin.current?.isConnected && detailOrigin.current.getClientRects().length) detailOrigin.current.focus();
       detailOrigin.current = null;
     });
-  };
+  }, [detailItem?.id]);
+
+  const closeTopOverlayForBack = useCallback(() => {
+    if (isSqlModalOpen) {
+      setIsSqlModalOpen(false);
+    } else if (itemToDelete) {
+      setItemToDelete(null);
+    } else if (isModalOpen) {
+      setIsModalOpen(false);
+    } else if (isMobileOpen) {
+      setIsMobileOpen(false);
+    } else if (detailItem) {
+      handleCloseDetails();
+    }
+  }, [detailItem, handleCloseDetails, isMobileOpen, isModalOpen, isSqlModalOpen, itemToDelete]);
+
+  useDashboardBackNavigation(closeTopOverlayForBack);
 
   const handleDeleteItem = async (item: InventoryItem) => {
     setIsDeleting(true);
