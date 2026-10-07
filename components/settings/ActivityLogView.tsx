@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import Image from 'next/image';
 import { authorizedApiFetch, readApiError } from '@/lib/auth/client';
 import { formatApproximateLocation, formatSecurityTime } from '@/lib/security/format';
+import { browserLocationMapUrl, formatBrowserLocation } from '@/lib/security/browserLocation';
 
 interface ActivityEvent {
   id: number;
@@ -21,6 +22,10 @@ interface ActivityEvent {
   connection_city: string | null;
   connection_region: string | null;
   connection_country: string | null;
+  connection_latitude: number | null;
+  connection_longitude: number | null;
+  connection_accuracy_meters: number | null;
+  connection_location_captured_at: string | null;
   device_model: string | null;
   device_description: string | null;
   connection_observed_at: string | null;
@@ -65,10 +70,12 @@ function eventSearchText(event: ActivityEvent): string {
     event.connection_ip,
     event.connection_city,
     event.connection_country,
+    event.connection_latitude,
+    event.connection_longitude,
     event.device_model,
     event.device_description,
     ...changes,
-  ].filter(Boolean).join(' ').toLowerCase();
+  ].filter((value) => value !== null && value !== undefined && value !== '').join(' ').toLowerCase();
 }
 
 function fieldLabel(value: string): string {
@@ -124,10 +131,14 @@ function ConnectionDetails({ event }: { event: ActivityEvent }) {
     return <p className="text-xs text-zinc-500 dark:text-zinc-400">{event.session_id ? `No recent check · Session ${event.session_id.slice(0, 8)}` : 'Not recorded for this event'}</p>;
   }
 
+  const browserLocation = formatBrowserLocation(event.connection_latitude, event.connection_longitude, event.connection_accuracy_meters);
+  const mapUrl = browserLocationMapUrl(event.connection_latitude, event.connection_longitude);
   return (
     <div className="min-w-0 space-y-1 text-xs leading-4 text-zinc-700 dark:text-zinc-300">
-      <p className="break-all font-semibold text-zinc-900 dark:text-zinc-100">{event.connection_ip || 'IP unavailable'}</p>
-      <p className="break-words">{formatApproximateLocation(event.connection_city, event.connection_country)}</p>
+      <p className="break-words font-semibold text-zinc-900 dark:text-zinc-100">{browserLocation ? `Browser location: ${browserLocation}` : formatApproximateLocation(event.connection_city, event.connection_country)}</p>
+      {mapUrl ? <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="inline-block font-semibold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300">View map</a> : null}
+      {event.connection_location_captured_at ? <p className="text-zinc-500 dark:text-zinc-400">Captured {formatSecurityTime(event.connection_location_captured_at)}</p> : null}
+      <p className="break-all">IP: {event.connection_ip || 'Unavailable'}</p>
       <p className="break-words">Model: {event.device_model || 'Unavailable'}</p>
       <p className="break-words text-zinc-500 dark:text-zinc-400">{event.device_description || 'Device unavailable'}</p>
       <time dateTime={event.connection_observed_at} className="block text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -296,7 +307,7 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
          
           <h2 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl">Activity log</h2>
           <p className="mt-1.5 text-sm leading-5 text-zinc-600 dark:text-zinc-400">See equipment changes and sign-in session checks, including observed connections.</p>
-          <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">IP is recorded at a session check. Location is an estimate from that IP; device models may be hidden by the browser. Older activity has no connection data.</p>
+          <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Location is reported by the browser at sign-in and during active session checks, with its estimated accuracy. IP and device details are separate. Older activity may only have approximate IP location.</p>
         </div>
 
         <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end">

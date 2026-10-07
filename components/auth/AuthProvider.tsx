@@ -4,6 +4,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import type { Session } from '@supabase/supabase-js';
 import { authorizedApiFetch, fetchAuthProfile, fetchWithTimeout, withDeadline } from '@/lib/auth/client';
 import { createBrowserClient } from '@/lib/supabase/client';
+import { LOCATION_MAX_AGE_MS, parseBrowserLocation, type BrowserLocation } from '@/lib/security/browserLocation';
+import { requestBrowserLocation } from '@/lib/security/browserLocation.client';
 
 export interface AuthProfile {
   id: string;
@@ -21,8 +23,8 @@ interface AuthContextValue {
   profile: AuthProfile | null;
   loadingMethod: AuthLoadingMethod;
   error: string | null;
-  signInWithPassword: (emailOrUsername: string, password: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  signInWithPassword: (emailOrUsername: string, password: string, location: BrowserLocation) => Promise<void>;
+  signInWithGoogle: (location: BrowserLocation) => Promise<void>;
   signOut: () => Promise<void>;
   retryAuthorization: () => Promise<void>;
   clearError: () => void;
@@ -30,6 +32,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const LOGIN_ERROR_KEY = 'ict_inventory_login_error';
+const PENDING_GOOGLE_LOCATION_KEY = 'ict_inventory_google_location';
 const VERIFICATION_ERROR = 'Your account could not be checked right now. Please try again.';
 type PendingPasswordSession = { accessToken: string; profile: AuthProfile };
 
@@ -57,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const operationRef = useRef(0);
   const signInAttemptRef = useRef(0);
   const tokenRef = useRef<string | null>(null);
+  const locationRef = useRef<BrowserLocation | null>(null);
   const googleSignInInProgressRef = useRef(false);
   const pendingPasswordRef = useRef<PendingPasswordSession | null>(null);
   const pendingLoginErrorRef = useRef<string | null>(null);
@@ -117,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     tokenRef.current = null;
+    locationRef.current = null;
     pendingPasswordRef.current = null;
     profileRef.current = null;
     setProfile(null);
@@ -214,7 +219,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       const nextProfile = await response.json() as AuthProfile;
-      if (operation === operationRef.current) acceptSession(session, nextProfile);
+      if (operation !== operationRef.current) return;
+
+      let pendingLocationRaw: string | null = null;
+      try { pendingLocationRaw = window.sessionStorage.getItem(PENDING_GOOGLE_LOCATION_KEY); } catch { /* OAuth requires browser storage. */ }
+      if (pendingLocationRaw || window.location.pathname === '/auth/completing') {
+        let pendingLocation: BrowserLocation | null = null;
+        try { pendingLocation = parseBrowserLocation(JSON.parse(pendingLocationRaw || 'null')); } catch { /* Invalid stored location. */ }
+        if (!pendingLocation) {
+          const message = 'Google sign-in needs a fresh browser location. Return to sign in and allow location again.';
+          pendingLoginErrorRef.current = message;
+          try { window.sessionStorage.setItem(LOGIN_ERROR_KEY, message); } catch { /* Keep the message in memory. */ }
+          try { window.sessionStorage.removeItem(PENDING_GOOGLE_LOCATION_KEY); } catch { /* Browser storage may be unavailable. */ }
+          try {
+            await withDeadline(createBrowserClient().auth.signOut({ scope: 'local' }), 8_000);
+            if (operation === operationRef.current) await resolveNoSession(false);
+          } catch {
+            showUnavailable('Could not clear a Google session without location. Please try again.', operation);
+          }
+          return;
+        }
+        const locationResponse = await fetchWithTimeout('/api/auth/presence', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'signed_in', location: pendingLocation }),
+        }, 12_000);
+        if (!locationResponse.ok) {
+          showUnavailable(await responseError(locationResponse, 'Could not record your sign-in location. Please try again.'), operation);
+          return;
+        }
+        if (operation !== operationRef.current) return;
+        locationRef.current = pendingLocation;
+        try { window.sessionStorage.removeItem(PENDING_GOOGLE_LOCATION_KEY); } catch { /* Session location is recorded. */ }
+      }
+      acceptSession(session, nextProfile);
     } catch {
       verificationFailed();
     }
@@ -254,6 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ? 'Google sign-in lost its browser session. Open the inventory in the same Chrome tab and try again.'
         : 'Google sign-in could not be completed. Please try again.';
       pendingLoginErrorRef.current = message;
+      try { window.sessionStorage.removeItem(PENDING_GOOGLE_LOCATION_KEY); } catch { /* Browser storage may be unavailable. */ }
       pageUrl.searchParams.delete('auth_error');
       window.history.replaceState(null, '', `${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);
     }
@@ -341,12 +380,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (status !== 'authenticated') return;
     let lastSentAt = 0;
-    const recordPresence = () => {
+    let lastLocationAttemptAt = locationRef.current?.capturedAt ?? 0;
+    const recordPresence = async () => {
       if (document.visibilityState !== 'visible' || Date.now() - lastSentAt < 20_000) return;
       lastSentAt = Date.now();
+      if (Date.now() - lastLocationAttemptAt >= LOCATION_MAX_AGE_MS) {
+        lastLocationAttemptAt = Date.now();
+        try { locationRef.current = await requestBrowserLocation(); } catch { locationRef.current = null; }
+      }
+      const location = locationRef.current && parseBrowserLocation(locationRef.current);
       void authorizedApiFetch('/api/auth/presence', {
         method: 'POST',
-        body: JSON.stringify({ event: 'seen' }),
+        body: JSON.stringify({ event: 'seen', location }),
       }).catch(() => undefined);
     };
     recordPresence();
@@ -366,11 +411,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await readInitialSession();
   }, [changeStatus, readInitialSession]);
 
-  const signInWithPassword = useCallback(async (emailOrUsername: string, password: string) => {
+  const signInWithPassword = useCallback(async (emailOrUsername: string, password: string, location: BrowserLocation) => {
+    if (!parseBrowserLocation(location)) {
+      setError('Check your browser location again before signing in.');
+      return;
+    }
     const attempt = ++signInAttemptRef.current;
     ++operationRef.current;
     pendingLoginErrorRef.current = null;
     takeLoginError();
+    try { window.sessionStorage.removeItem(PENDING_GOOGLE_LOCATION_KEY); } catch { /* Continue with password sign-in. */ }
     let credentialsAccepted = false;
     let acceptedToken: string | null = null;
     setError(null);
@@ -379,7 +429,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await fetchWithTimeout('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailOrUsername, password }),
+        body: JSON.stringify({ emailOrUsername, password, location }),
       }, 15_000);
       if (!response.ok) throw new Error(await responseError(response, 'Invalid email/username or password.'));
 
@@ -393,6 +443,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       credentialsAccepted = true;
       acceptedToken = result.access_token;
+      locationRef.current = location;
       pendingPasswordRef.current = { accessToken: result.access_token, profile: result.profile };
       const client = clientRef.current || createBrowserClient();
       clientRef.current = client;
@@ -405,6 +456,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Your session could not be saved. Please try again.');
       }
       if (statusRef.current !== 'authenticated' || tokenRef.current !== data.session.access_token) {
+        locationRef.current = location;
         acceptSession(data.session, result.profile);
       }
     } catch (signInError) {
@@ -416,6 +468,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (credentialsAccepted && statusRef.current === 'authenticated' && tokenRef.current === acceptedToken) {
         return;
       }
+      locationRef.current = null;
       if (credentialsAccepted) {
         showUnavailable(message, ++operationRef.current);
       } else {
@@ -428,7 +481,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [acceptSession, showUnavailable]);
 
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithGoogle = useCallback(async (location: BrowserLocation) => {
+    if (!parseBrowserLocation(location)) {
+      setError('Check your browser location again before signing in.');
+      return;
+    }
     const attempt = ++signInAttemptRef.current;
     ++operationRef.current;
     googleSignInInProgressRef.current = true;
@@ -444,6 +501,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setHasSession(false);
     changeStatus('unauthenticated');
     try {
+      try {
+        window.sessionStorage.setItem(PENDING_GOOGLE_LOCATION_KEY, JSON.stringify(location));
+      } catch {
+        throw new Error('Google sign-in needs browser storage in this tab. Enable site storage and try again.');
+      }
       const client = clientRef.current || createBrowserClient();
       clientRef.current = client;
 
@@ -483,6 +545,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.location.replace(data.url);
     } catch (oauthError) {
       if (attempt !== signInAttemptRef.current) return;
+      try { window.sessionStorage.removeItem(PENDING_GOOGLE_LOCATION_KEY); } catch { /* Browser storage was unavailable. */ }
       googleSignInInProgressRef.current = false;
       setError(oauthError instanceof Error ? oauthError.message : 'Google sign-in could not be started.');
       clearGoogleLoading();
@@ -494,6 +557,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ++operationRef.current;
     googleSignInInProgressRef.current = false;
     pendingPasswordRef.current = null;
+    locationRef.current = null;
     clearGoogleLoading();
     profileRef.current = null;
     setProfile(null);

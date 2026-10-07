@@ -240,6 +240,50 @@
   line-height: 1.5;
 }
 
+.locationCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-top: 19px;
+  border: 1px solid var(--auth-line);
+  border-radius: 10px;
+  background: var(--auth-field);
+  padding: 12px;
+}
+
+.locationIcon {
+  display: grid;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--auth-focus);
+  color: var(--auth-primary);
+}
+
+.locationBody { min-width: 0; }
+.locationTitle { margin: 0; font-size: 12px; font-weight: 750; line-height: 1.4; }
+.locationCopy { margin: 3px 0 0; color: var(--auth-muted); font-size: 11px; line-height: 1.5; }
+.locationError { margin: 7px 0 0; color: #982c2d; font-size: 11px; line-height: 1.5; }
+:global(html.dark) .locationError { color: #ffd5d1; }
+.locationButton {
+  min-height: 32px;
+  margin-top: 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 5px 0;
+  color: var(--auth-link);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.locationButton:hover:not(:disabled) { color: var(--auth-link-hover); text-decoration: underline; text-underline-offset: 3px; }
+.locationButton:focus-visible { outline: 3px solid var(--auth-focus); outline-offset: 2px; }
+.locationButton:disabled { cursor: not-allowed; opacity: 0.58; }
+
 .form {
   display: grid;
   gap: 16px;
@@ -595,6 +639,8 @@
     gap: 10px;
     margin-top: 14px;
   }
+
+  .locationCard { margin-top: 12px; padding: 9px; }
 
   .label {
     margin-bottom: 5px;

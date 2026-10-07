@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createAdminClient } from '@/lib/auth/server';
 import { connectionFromRequest } from '@/lib/security/connection';
+import type { BrowserLocation } from '@/lib/security/browserLocation';
 
 interface SessionIdentity {
   sessionId: string | null;
@@ -15,6 +16,7 @@ export async function recordAccountSession(
   identity: SessionIdentity,
   request: Request,
   event: 'signed_in' | 'seen' | 'ended',
+  location: BrowserLocation | null = null,
 ): Promise<void> {
   if (!identity.sessionId) throw new Error('This sign-in has no verifiable session ID.');
   const connection = connectionFromRequest(request);
@@ -32,6 +34,10 @@ export async function recordAccountSession(
     p_device_model: connection.deviceModel,
     p_device_description: connection.deviceDescription,
     p_user_agent: connection.userAgent,
+    p_latitude: location?.latitude ?? null,
+    p_longitude: location?.longitude ?? null,
+    p_accuracy_meters: location?.accuracyMeters ?? null,
+    p_location_captured_at: location ? new Date(location.capturedAt).toISOString() : null,
   });
   if (error) throw error;
 }

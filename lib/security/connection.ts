@@ -27,15 +27,6 @@ function clientHint(value: string | null, maxLength: number): string | null {
   }
 }
 
-function cityHeader(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    return clean(decodeURIComponent(value), 100);
-  } catch {
-    return null;
-  }
-}
-
 function browserName(userAgent: string): string {
   if (/Edg\//i.test(userAgent)) return 'Edge';
   if (/OPR\//i.test(userAgent)) return 'Opera';
@@ -70,11 +61,10 @@ export function connectionFromRequest(request: Request): ConnectionInfo {
     ? (headers.get('x-vercel-forwarded-for') || headers.get('x-forwarded-for'))?.split(',')[0].trim()
     : null;
   const ipAddress = forwarded && isIP(forwarded) ? forwarded : null;
-  const countryHeader = onVercel && ipAddress ? clean(headers.get('x-vercel-ip-country'), 2)?.toUpperCase() : null;
-  const country = countryHeader && /^[A-Z]{2}$/.test(countryHeader) ? countryHeader : null;
-  const regionHeader = onVercel && ipAddress ? clean(headers.get('x-vercel-ip-country-region'), 8)?.toUpperCase() : null;
-  const region = regionHeader && /^[A-Z0-9-]{1,8}$/.test(regionHeader) ? regionHeader : null;
-  const city = onVercel && ipAddress ? cityHeader(headers.get('x-vercel-ip-city')) : null;
+  // Keep the IP as connection metadata, but do not infer a location from it.
+  const city = null;
+  const region = null;
+  const country = null;
 
   const userAgent = clean(headers.get('user-agent'), 512);
   const platform = platformName(userAgent || '', clientHint(headers.get('sec-ch-ua-platform'), 40));

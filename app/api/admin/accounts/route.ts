@@ -8,7 +8,6 @@ import {
   validEmail,
   validPassword,
 } from '@/lib/auth/server';
-import { getInvitationEmailConfig, sendAccountInvitation, type InvitationEmailConfig } from '@/lib/email/accountInvitation';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +15,7 @@ const MAX_ACCOUNTS = 2;
 const USERNAME_PATTERN = /^[a-z0-9._-]{3,32}$/;
 
 function missingSecuritySchema(code: string | undefined) {
-  return code === 'PGRST205' || code === '42P01';
+  return code === 'PGRST205' || code === '42P01' || code === '42703' || code === 'PGRST204';
 }
 
 async function manageAccount(
@@ -60,7 +59,7 @@ export async function GET(request: Request) {
         .is('ended_at', null)
         .gte('last_seen_at', activeSince),
       Promise.all(accountIds.map((id) => admin.from('account_sessions')
-        .select('last_seen_at,ip_address,city,region,country,device_model,device_description')
+        .select('last_seen_at,ip_address,city,region,country,latitude,longitude,accuracy_meters,location_captured_at,device_model,device_description')
         .eq('account_id', id)
         .order('last_seen_at', { ascending: false })
         .limit(1)
@@ -90,6 +89,10 @@ export async function GET(request: Request) {
             city: latestById.get(account.id)?.city ?? null,
             region: latestById.get(account.id)?.region ?? null,
             country: latestById.get(account.id)?.country ?? null,
+            latitude: latestById.get(account.id)?.latitude ?? null,
+            longitude: latestById.get(account.id)?.longitude ?? null,
+            accuracyMeters: latestById.get(account.id)?.accuracy_meters ?? null,
+            locationCapturedAt: latestById.get(account.id)?.location_captured_at ?? null,
             deviceModel: latestById.get(account.id)?.device_model ?? null,
             deviceDescription: latestById.get(account.id)?.device_description ?? null,
           } : null,
@@ -153,16 +156,6 @@ export async function POST(request: Request) {
       if (usernameInUse) return Response.json({ error: 'That username is already in use.' }, { status: 409 });
     }
 
-    let invitationConfig: InvitationEmailConfig;
-    try {
-      invitationConfig = getInvitationEmailConfig();
-    } catch (configError) {
-      return Response.json(
-        { error: configError instanceof Error ? configError.message : 'Invitation email is not configured.' },
-        { status: 503 }
-      );
-    }
-
     const { user: authUser, created: createdAuthUser } = await createOrUpdateAuthUser(email, password, name);
     const { error } = await manageAccount(admin, {
       p_operation: 'create',
@@ -187,19 +180,7 @@ export async function POST(request: Request) {
       );
     }
 
-    try {
-      await sendAccountInvitation(invitationConfig, { name, email, username, temporaryPassword: password });
-      return Response.json({ ok: true, invitationSent: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
-    } catch {
-      return Response.json(
-        {
-          ok: true,
-          invitationSent: false,
-          warning: 'The account was created, but its invitation email could not be delivered. Check the mail service before sharing the sign-in details securely.',
-        },
-        { status: 201, headers: { 'Cache-Control': 'no-store' } }
-      );
-    }
+    return Response.json({ ok: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return Response.json({ error: 'The authorized account could not be created.' }, { status: 503 });
   }

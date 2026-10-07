@@ -7,14 +7,24 @@ import {
   verifiedSessionId,
 } from '@/lib/auth/server';
 import { recordAccountSession } from '@/lib/security/presence';
+import { parseBrowserLocation } from '@/lib/security/browserLocation';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const payload = await request.json() as { emailOrUsername?: unknown; password?: unknown };
+    const rawPayload = await request.json().catch(() => null) as unknown;
+    if (!rawPayload || typeof rawPayload !== 'object') {
+      return Response.json({ error: 'Invalid sign-in request.' }, { status: 400 });
+    }
+    const payload = rawPayload as { emailOrUsername?: unknown; password?: unknown; location?: unknown };
     const login = typeof payload.emailOrUsername === 'string' ? payload.emailOrUsername.trim() : '';
     const password = typeof payload.password === 'string' ? payload.password : '';
+    const location = parseBrowserLocation(payload.location);
+
+    if (!location) {
+      return Response.json({ error: 'Allow a fresh browser location before signing in.' }, { status: 400 });
+    }
 
     if (!login || !password || login.length > 254 || password.length > 128) {
       return Response.json({ error: 'Invalid email/username or password.' }, { status: 401 });
@@ -77,9 +87,10 @@ export async function POST(request: Request) {
         userId: data.user.id,
         name: account.full_name,
         email: normalizeEmail(data.user.email),
-      }, request, 'signed_in');
+      }, request, 'signed_in', location);
     } catch {
       console.error('Could not record the password sign-in session.');
+      return Response.json({ error: 'Could not record your sign-in location. Apply the latest database schema and try again.' }, { status: 503 });
     }
 
     return Response.json(

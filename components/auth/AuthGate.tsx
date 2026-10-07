@@ -52,7 +52,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (auth.status !== 'authenticated') {
     return (
       <LoginScreen
-        onPasswordSignIn={({ emailOrUsername, password }) => auth.signInWithPassword(emailOrUsername, password)}
+        onPasswordSignIn={({ emailOrUsername, password, location }) => auth.signInWithPassword(emailOrUsername, password, location)}
         onGoogleSignIn={auth.signInWithGoogle}
         loadingMethod={auth.loadingMethod}
         error={auth.error}

@@ -1,5 +1,6 @@
 import { createPublicAuthClient, getAuthorizedActor } from '@/lib/auth/server';
 import { recordAccountSession } from '@/lib/security/presence';
+import { parseBrowserLocation } from '@/lib/security/browserLocation';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,8 +17,13 @@ export async function POST(request: Request) {
 
     const payload = await request.json().catch(() => null) as unknown;
     const event = payload && typeof payload === 'object' && 'event' in payload ? payload.event : null;
-    if (event !== 'seen' && event !== 'ended') {
+    if (event !== 'signed_in' && event !== 'seen' && event !== 'ended') {
       return Response.json({ error: 'Invalid session event.' }, { status: 400 });
+    }
+    const rawLocation = payload && typeof payload === 'object' && 'location' in payload ? payload.location : null;
+    const location = rawLocation === null ? null : parseBrowserLocation(rawLocation);
+    if ((event === 'signed_in' && !location) || (rawLocation !== null && !location)) {
+      return Response.json({ error: 'Allow a fresh browser location before signing in.' }, { status: 400 });
     }
 
     if (event === 'ended') {
@@ -31,7 +37,7 @@ export async function POST(request: Request) {
       userId: actor.id,
       name: actor.name,
       email: actor.email,
-    }, request, event);
+    }, request, event, location);
     return Response.json({ ok: true }, { headers: responseHeaders });
   } catch {
     return Response.json({ error: 'Could not record this session.' }, { status: 503 });

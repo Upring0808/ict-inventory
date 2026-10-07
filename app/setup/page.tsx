@@ -7,12 +7,10 @@ export default function InitialSetupPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const [invitationWarning, setInvitationWarning] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-    setInvitationWarning(null);
     setIsSaving(true);
     const data = new FormData(event.currentTarget);
 
@@ -28,11 +26,8 @@ export default function InitialSetupPage() {
           password: data.get('password'),
         }),
       });
-      const result = await response.json() as { error?: string; invitationSent?: boolean; warning?: string };
+      const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || 'Initial setup could not be completed.');
-      if (!result.invitationSent) {
-        setInvitationWarning(result.warning || 'The first account was created, but its invitation email could not be delivered.');
-      }
       setIsComplete(true);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Initial setup could not be completed.');
@@ -55,8 +50,7 @@ export default function InitialSetupPage() {
             {isComplete ? (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900/60 dark:bg-emerald-950/30">
                 <h2 className="font-semibold text-emerald-900 dark:text-emerald-100">First account created</h2>
-                <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">{invitationWarning ? 'The account is ready, but the email needs attention.' : 'The invitation email includes your temporary password and sign-in link. After signing in, open Settings to add the second authorized user.'}</p>
-                {invitationWarning && <p role="alert" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{invitationWarning}</p>}
+                <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-200">Sign in with the email or username and password you chose. After signing in, open Settings to add the second authorized user.</p>
                 <Link href="/" className="mt-4 inline-flex rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-800">Continue to sign in</Link>
               </div>
             ) : (
@@ -80,12 +74,12 @@ export default function InitialSetupPage() {
                 <div className="sm:col-span-2">
                   <label htmlFor="account-password" className="mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Password</label>
                   <input id="account-password" name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} className="w-full rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-500/10 dark:border-zinc-700 dark:bg-zinc-950" />
-                  <p className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">Use at least 12 characters. This temporary password will be emailed to the account holder, who can change it after signing in.</p>
+                  <p className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">Use at least 12 characters. You can change it later in Settings.</p>
                 </div>
                 {error && <p role="alert" className="sm:col-span-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">{error}</p>}
                 <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 pt-5 dark:border-zinc-800">
                   <Link href="/" className="text-sm font-semibold text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100">Back to sign in</Link>
-                  <button type="submit" disabled={isSaving} className="rounded-lg bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-zinc-900">{isSaving ? 'Creating and sending…' : 'Create account and send invitation'}</button>
+                  <button type="submit" disabled={isSaving} className="rounded-lg bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-zinc-900">{isSaving ? 'Creating…' : 'Create account'}</button>
                 </div>
               </form>
             )}

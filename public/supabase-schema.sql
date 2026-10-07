@@ -107,8 +107,8 @@ create table if not exists public.activity_log (
   occurred_at timestamptz not null default timezone('utc'::text, now())
 );
 
--- Connection details are observations made by the application server. They
--- are copied into audit rows only when the same Auth session was seen recently.
+-- Connection metadata comes from the application server; coordinates and
+-- accuracy are browser-reported. Recent session data is copied into audit rows.
 alter table public.activity_log add column if not exists session_id uuid;
 alter table public.activity_log add column if not exists connection_ip inet;
 alter table public.activity_log add column if not exists connection_city text;
@@ -117,6 +117,10 @@ alter table public.activity_log add column if not exists connection_country text
 alter table public.activity_log add column if not exists device_model text;
 alter table public.activity_log add column if not exists device_description text;
 alter table public.activity_log add column if not exists connection_observed_at timestamptz;
+alter table public.activity_log add column if not exists connection_latitude double precision;
+alter table public.activity_log add column if not exists connection_longitude double precision;
+alter table public.activity_log add column if not exists connection_accuracy_meters double precision;
+alter table public.activity_log add column if not exists connection_location_captured_at timestamptz;
 
 create table if not exists public.account_sessions (
   session_id uuid primary key,
@@ -133,6 +137,10 @@ create table if not exists public.account_sessions (
   device_description text,
   user_agent text
 );
+alter table public.account_sessions add column if not exists latitude double precision;
+alter table public.account_sessions add column if not exists longitude double precision;
+alter table public.account_sessions add column if not exists accuracy_meters double precision;
+alter table public.account_sessions add column if not exists location_captured_at timestamptz;
 
 create index if not exists idx_activity_log_occurred_at on public.activity_log (occurred_at desc);
 create index if not exists idx_activity_log_equipment on public.activity_log (equipment_property_number, occurred_at desc);
@@ -250,7 +258,8 @@ begin
     actor_user_id, actor_name, actor_email, action, target_type,
     target_id, target_label, details, session_id, connection_ip,
     connection_city, connection_region, connection_country,
-    device_model, device_description, connection_observed_at
+    connection_latitude, connection_longitude, connection_accuracy_meters,
+    connection_location_captured_at, device_model, device_description, connection_observed_at
   ) values (
     case when v_actor_id ~* '^[0-9a-f-]{36}$' then v_actor_id::uuid else null end,
     v_actor_name,
@@ -262,7 +271,8 @@ begin
     v_details,
     case when v_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then v_session_id::uuid else null end,
     v_connection.ip_address, v_connection.city, v_connection.region,
-    v_connection.country, v_connection.device_model,
+    v_connection.country, v_connection.latitude, v_connection.longitude,
+    v_connection.accuracy_meters, v_connection.location_captured_at, v_connection.device_model,
     v_connection.device_description, v_connection.last_seen_at
   );
 
@@ -346,8 +356,10 @@ $$;
 revoke all on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean, uuid) from public, anon, authenticated;
 grant execute on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean, uuid) to service_role;
 
--- Only the authenticated Next.js route calls this service-role function. It
--- records an observation, not a claim that an inventory action used this IP.
+-- Only the authenticated Next.js route calls this service-role function.
+-- Browser coordinates are user/device reported and are not a trusted geofence.
+-- Keep the old signature during upgrades so the existing app can run until
+-- the new version is deployed; PostgREST selects this overload by its arguments.
 create or replace function public.record_account_session(
   p_session_id uuid,
   p_account_id uuid,
@@ -361,7 +373,11 @@ create or replace function public.record_account_session(
   p_country text,
   p_device_model text,
   p_device_description text,
-  p_user_agent text
+  p_user_agent text,
+  p_latitude double precision,
+  p_longitude double precision,
+  p_accuracy_meters double precision,
+  p_location_captured_at timestamptz
 )
 returns void
 language plpgsql
@@ -373,9 +389,26 @@ declare
   v_exists boolean;
   v_action text;
   v_now timestamptz := timezone('utc'::text, now());
+  v_latitude double precision;
+  v_longitude double precision;
+  v_accuracy_meters double precision;
+  v_location_captured_at timestamptz;
 begin
   if p_event not in ('signed_in', 'seen', 'ended') then
     raise exception using errcode = '22023', message = 'Invalid session event.';
+  end if;
+  if (p_latitude is null) <> (p_longitude is null)
+    or (p_latitude is null) <> (p_accuracy_meters is null)
+    or (p_latitude is null) <> (p_location_captured_at is null)
+    or (p_event = 'signed_in' and p_latitude is null)
+    or (p_latitude is not null and (
+      p_latitude < -90 or p_latitude > 90
+      or p_longitude < -180 or p_longitude > 180
+      or p_accuracy_meters <= 0 or p_accuracy_meters > 10000000
+      or p_location_captured_at < now() - interval '5 minutes'
+      or p_location_captured_at > now() + interval '30 seconds'
+    )) then
+    raise exception using errcode = '22023', message = 'Invalid browser location.';
   end if;
   if not exists (
     select 1 from public.authorized_accounts
@@ -389,17 +422,23 @@ begin
   select * into v_previous from public.account_sessions
   where session_id = p_session_id for update;
   v_exists := found;
+  v_latitude := coalesce(p_latitude, v_previous.latitude);
+  v_longitude := coalesce(p_longitude, v_previous.longitude);
+  v_accuracy_meters := coalesce(p_accuracy_meters, v_previous.accuracy_meters);
+  v_location_captured_at := coalesce(p_location_captured_at, v_previous.location_captured_at);
 
   if not v_exists then
     insert into public.account_sessions (
       session_id, account_id, auth_user_id, first_seen_at, last_seen_at,
       ended_at, ip_address, city, region, country, device_model,
-      device_description, user_agent
+      device_description, user_agent, latitude, longitude,
+      accuracy_meters, location_captured_at
     ) values (
       p_session_id, p_account_id, p_auth_user_id, v_now, v_now,
       case when p_event = 'ended' then v_now else null end,
       p_ip_address, p_city, p_region, p_country, p_device_model,
-      p_device_description, p_user_agent
+      p_device_description, p_user_agent, v_latitude, v_longitude,
+      v_accuracy_meters, v_location_captured_at
     );
     v_action := case
       when p_event = 'ended' then 'auth.signed_out'
@@ -426,6 +465,10 @@ begin
         city = p_city,
         region = p_region,
         country = p_country,
+        latitude = v_latitude,
+        longitude = v_longitude,
+        accuracy_meters = v_accuracy_meters,
+        location_captured_at = v_location_captured_at,
         device_model = p_device_model,
         device_description = p_device_description,
         user_agent = p_user_agent
@@ -436,20 +479,23 @@ begin
     insert into public.activity_log (
       actor_user_id, actor_name, actor_email, action, target_type,
       target_label, details, session_id, connection_ip, connection_city,
-      connection_region, connection_country, device_model,
+      connection_region, connection_country, connection_latitude,
+      connection_longitude, connection_accuracy_meters,
+      connection_location_captured_at, device_model,
       device_description, connection_observed_at
     ) values (
       p_auth_user_id, p_actor_name, lower(p_actor_email), v_action, 'session',
       'Sign-in session', jsonb_build_object('session', left(p_session_id::text, 8)),
       p_session_id, p_ip_address, p_city, p_region, p_country,
+      v_latitude, v_longitude, v_accuracy_meters, v_location_captured_at,
       p_device_model, p_device_description, v_now
     );
   end if;
 end;
 $$;
 
-revoke all on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text) from public, anon, authenticated;
-grant execute on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text) to service_role;
+revoke all on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text, double precision, double precision, double precision, timestamptz) from public, anon, authenticated;
+grant execute on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text, double precision, double precision, double precision, timestamptz) to service_role;
 
 -- Custody is changed only by the transfer function below. Direct updates must
 -- not silently rewrite the custodian or the receipt history.
@@ -632,7 +678,9 @@ begin
     actor_user_id, actor_name, actor_email, action, target_type,
     target_id, target_label, equipment_property_number, details,
     session_id, connection_ip, connection_city, connection_region,
-    connection_country, device_model, device_description, connection_observed_at
+    connection_country, connection_latitude, connection_longitude,
+    connection_accuracy_meters, connection_location_captured_at,
+    device_model, device_description, connection_observed_at
   ) values (
     v_actor_id,
     v_actor_name,
@@ -645,7 +693,8 @@ begin
     v_details,
     case when v_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then v_session_id::uuid else null end,
     v_connection.ip_address, v_connection.city, v_connection.region,
-    v_connection.country, v_connection.device_model,
+    v_connection.country, v_connection.latitude, v_connection.longitude,
+    v_connection.accuracy_meters, v_connection.location_captured_at, v_connection.device_model,
     v_connection.device_description, v_connection.last_seen_at
   );
 

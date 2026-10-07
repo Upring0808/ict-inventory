@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { authorizedApiFetch, readApiError } from '@/lib/auth/client';
 import { formatApproximateLocation, formatSecurityTime } from '@/lib/security/format';
+import { browserLocationMapUrl, formatBrowserLocation } from '@/lib/security/browserLocation';
 
 interface AuthorizedAccount {
   id: string;
@@ -19,6 +20,10 @@ interface AuthorizedAccount {
     city: string | null;
     region: string | null;
     country: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    accuracyMeters: number | null;
+    locationCapturedAt: string | null;
     deviceModel: string | null;
     deviceDescription: string | null;
   } | null;
@@ -36,7 +41,6 @@ export function AccountSettings() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
 
   const loadAccounts = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -71,7 +75,6 @@ export function AccountSettings() {
     setBusyId('new');
     setError(null);
     setSuccess(null);
-    setWarning(null);
     const form = event.currentTarget;
     const data = new FormData(form);
     const username = String(data.get('username') || '').trim();
@@ -92,13 +95,8 @@ export function AccountSettings() {
         }),
       });
       if (!response.ok) throw new Error(await readApiError(response, 'The account could not be created.'));
-      const result = await response.json() as { invitationSent?: boolean; warning?: string };
       form.reset();
-      if (result.invitationSent) {
-        setSuccess('Authorized account created. An invitation with the temporary password and sign-in link was emailed.');
-      } else {
-        setWarning(result.warning || 'The account was created, but its invitation email could not be delivered.');
-      }
+      setSuccess('Authorized account created. Share the sign-in details securely with the account holder.');
       await loadAccounts();
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'The account could not be created.');
@@ -113,7 +111,6 @@ export function AccountSettings() {
     setBusyId(account.id);
     setError(null);
     setSuccess(null);
-    setWarning(null);
     const data = new FormData(event.currentTarget);
     const email = String(data.get('email') || '').trim();
     const username = String(data.get('username') || '').trim();
@@ -189,7 +186,6 @@ export function AccountSettings() {
     setBusyId(account.id);
     setError(null);
     setSuccess(null);
-    setWarning(null);
     try {
       const response = await authorizedApiFetch('/api/admin/accounts', {
         method: 'DELETE',
@@ -228,9 +224,9 @@ export function AccountSettings() {
         </div>
       </div>
 
-      {(error || warning || success) && (
-        <div role={error || warning ? 'alert' : 'status'} className={`rounded-xl border px-4 py-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200' : warning ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200' : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'}`}>
-          {error || warning || success}
+      {(error || success) && (
+        <div role={error ? 'alert' : 'status'} className={`rounded-xl border px-4 py-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200' : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'}`}>
+          {error || success}
         </div>
       )}
       {!trackingAvailable && !error ? <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">Active status and last online will appear after the updated Supabase schema is applied.</p> : null}
@@ -278,7 +274,16 @@ export function AccountSettings() {
                       {account.lastConnection ? (
                         <div className="border-t border-zinc-200 pt-3 dark:border-zinc-800 sm:col-span-2">
                           <span className="block text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Most recent connection</span>
-                          <p className="mt-1 break-words text-zinc-700 dark:text-zinc-300">IP: {account.lastConnection.ipAddress || 'Unavailable'} · {formatApproximateLocation(account.lastConnection.city, account.lastConnection.country)}</p>
+                          <p className="mt-1 break-words text-zinc-700 dark:text-zinc-300">
+                            {formatBrowserLocation(account.lastConnection.latitude, account.lastConnection.longitude, account.lastConnection.accuracyMeters)
+                              ? `Browser location: ${formatBrowserLocation(account.lastConnection.latitude, account.lastConnection.longitude, account.lastConnection.accuracyMeters)}`
+                              : formatApproximateLocation(account.lastConnection.city, account.lastConnection.country)}
+                            {browserLocationMapUrl(account.lastConnection.latitude, account.lastConnection.longitude)
+                              ? <> · <a href={browserLocationMapUrl(account.lastConnection.latitude, account.lastConnection.longitude) || undefined} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300">View map</a></>
+                              : null}
+                          </p>
+                          {account.lastConnection.locationCapturedAt ? <p className="mt-0.5 text-zinc-500 dark:text-zinc-400">Captured {formatSecurityTime(account.lastConnection.locationCapturedAt)}</p> : null}
+                          <p className="mt-0.5 break-all text-zinc-600 dark:text-zinc-400">IP: {account.lastConnection.ipAddress || 'Unavailable'}</p>
                           <p className="mt-0.5 break-words text-zinc-600 dark:text-zinc-400">Model: {account.lastConnection.deviceModel || 'Unavailable'} · {account.lastConnection.deviceDescription || 'Device unavailable'}</p>
                         </div>
                       ) : null}
@@ -314,7 +319,7 @@ export function AccountSettings() {
         <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
           <div className="mb-4">
             <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Add an authorized user</h3>
-            <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Create the second account and email its invitation. Public registration is disabled.</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Create the second account and share its sign-in details with the account holder. Public registration is disabled.</p>
           </div>
           {accounts.length >= 2 ? (
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">The two authorized account slots are filled. Remove an account before adding another.</div>
@@ -323,8 +328,8 @@ export function AccountSettings() {
               <label className={labelClassName}>Name<input name="name" required minLength={2} maxLength={100} className={inputClassName} /></label>
               <label className={labelClassName}>Email address<input name="email" type="email" autoComplete="email" required className={inputClassName} /></label>
               <label className={labelClassName}>Username <span className="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span><input name="username" autoComplete="username" minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" className={inputClassName} /></label>
-              <label className={labelClassName}>Temporary password<input name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} className={inputClassName} /><span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">At least 12 characters. This password will be included in the invitation email; the recipient can change it after signing in.</span></label>
-              <button type="submit" disabled={busyId === 'new'} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-zinc-900">{busyId === 'new' ? 'Creating and sending…' : 'Create account and send invitation'}</button>
+              <label className={labelClassName}>Password<input name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} className={inputClassName} /><span className="mt-1 block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">At least 12 characters. Share it securely; the account holder can change it after signing in.</span></label>
+              <button type="submit" disabled={busyId === 'new'} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-zinc-900">{busyId === 'new' ? 'Creating…' : 'Create account'}</button>
             </form>
           )}
         </section>

@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
     const admin = createAdminClient();
     let query = admin.from('activity_log')
-      .select('id,actor_user_id,actor_name,actor_email,action,target_type,target_id,target_label,equipment_property_number,details,occurred_at,session_id,connection_ip,connection_city,connection_region,connection_country,device_model,device_description,connection_observed_at');
+      .select('id,actor_user_id,actor_name,actor_email,action,target_type,target_id,target_label,equipment_property_number,details,occurred_at,session_id,connection_ip,connection_city,connection_region,connection_country,connection_latitude,connection_longitude,connection_accuracy_meters,connection_location_captured_at,device_model,device_description,connection_observed_at');
     if (from && to) query = query.gte('occurred_at', from.toISOString()).lt('occurred_at', to.toISOString());
     // Fetch one extra row to determine whether more results exist.
     const fullResult = await query.order('occurred_at', { ascending: false })
@@ -50,6 +50,10 @@ export async function GET(request: Request) {
         connection_city: null,
         connection_region: null,
         connection_country: null,
+        connection_latitude: null,
+        connection_longitude: null,
+        connection_accuracy_meters: null,
+        connection_location_captured_at: null,
         device_model: null,
         device_description: null,
         connection_observed_at: null,

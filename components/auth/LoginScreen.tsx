@@ -3,18 +3,22 @@
 import Image from 'next/image';
 import { useEffect, useState, type FormEvent } from 'react';
 import { AppBrand } from '@/components/branding/AppBrand';
+import { LocationPermission } from '@/components/auth/LocationPermission';
 import { withDeadline } from '@/lib/auth/client';
+import { LOCATION_MAX_AGE_MS, type BrowserLocation } from '@/lib/security/browserLocation';
+import { requestBrowserLocation } from '@/lib/security/browserLocation.client';
 import { createBrowserClient } from '@/lib/supabase/client';
 import styles from './LoginScreen.module.css';
 
 export interface LoginCredentials {
   emailOrUsername: string;
   password: string;
+  location: BrowserLocation;
 }
 
 export interface LoginScreenProps {
   onPasswordSignIn: (credentials: LoginCredentials) => void | Promise<void>;
-  onGoogleSignIn: () => void | Promise<void>;
+  onGoogleSignIn: (location: BrowserLocation) => void | Promise<void>;
   isLoading?: boolean;
   loadingMethod?: 'google' | 'password' | null;
   error?: string | null;
@@ -36,9 +40,33 @@ export function LoginScreen({
   const [isForgotSubmitting, setIsForgotSubmitting] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotNotice, setForgotNotice] = useState<string | null>(null);
+  const [location, setLocation] = useState<BrowserLocation | null>(null);
+  const [locationChecking, setLocationChecking] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   const activeLoadingMethod = loadingMethod ?? (isLoading ? 'password' : null);
   const isBusy = isLoading || activeLoadingMethod !== null;
+
+  const checkLocation = async (): Promise<BrowserLocation | null> => {
+    setLocationChecking(true);
+    setLocationError(null);
+    try {
+      const next = await requestBrowserLocation();
+      setLocation(next);
+      return next;
+    } catch (requestError) {
+      setLocation(null);
+      setLocationError(requestError instanceof Error ? requestError.message : 'Location could not be checked. Please try again.');
+      return null;
+    } finally {
+      setLocationChecking(false);
+    }
+  };
+
+  const freshLocation = async (): Promise<BrowserLocation | null> => {
+    if (location && Date.now() - location.capturedAt <= LOCATION_MAX_AGE_MS) return location;
+    return checkLocation();
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -52,15 +80,22 @@ export function LoginScreen({
     return () => window.clearTimeout(timer);
   }, []);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const identifier = String(formData.get('emailOrUsername') ?? '').trim();
     const password = String(formData.get('password') ?? '');
 
-    if (identifier && password) {
-      void onPasswordSignIn({ emailOrUsername: identifier, password });
+    if (identifier && password && location) {
+      const currentLocation = await freshLocation();
+      if (currentLocation) await onPasswordSignIn({ emailOrUsername: identifier, password, location: currentLocation });
     }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (!location) return;
+    const currentLocation = await freshLocation();
+    if (currentLocation) await onGoogleSignIn(currentLocation);
   };
 
   const handleForgotSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -139,6 +174,14 @@ export function LoginScreen({
                 <h1 className={styles.heading}>Welcome back.</h1>
                 <p className={styles.subheading}>Sign in to manage ICT equipment and keep every record in view.</p>
 
+                <LocationPermission
+                  location={location}
+                  isChecking={locationChecking}
+                  error={locationError}
+                  disabled={isBusy}
+                  onRequest={() => { void checkLocation(); }}
+                />
+
                 <form onSubmit={handleSubmit} className={styles.form}>
                   <div className={styles.field}>
                     <label htmlFor="login-email" className={styles.label}>Email or username</label>
@@ -189,7 +232,7 @@ export function LoginScreen({
 
                   {error ? <AuthMessage kind="error">{error}</AuthMessage> : null}
 
-                  <button type="submit" disabled={isBusy} aria-busy={activeLoadingMethod === 'password'} className={styles.primaryButton}>
+                  <button type="submit" disabled={isBusy || locationChecking || !location} aria-busy={activeLoadingMethod === 'password'} className={styles.primaryButton}>
                     {activeLoadingMethod === 'password' ? <LoadingSpinner /> : null}
                     <span>{activeLoadingMethod === 'password' ? 'Signing in…' : 'Sign in'}</span>
                   </button>
@@ -198,8 +241,8 @@ export function LoginScreen({
                 <div className={styles.divider} aria-hidden="true">or continue with</div>
                 <button
                   type="button"
-                  onClick={() => void onGoogleSignIn()}
-                  disabled={isBusy}
+                  onClick={() => { void handleGoogleSignIn(); }}
+                  disabled={isBusy || locationChecking || !location}
                   aria-busy={activeLoadingMethod === 'google'}
                   className={styles.googleButton}
                 >
