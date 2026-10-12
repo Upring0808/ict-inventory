@@ -1,6 +1,5 @@
 import { createBrowserClient } from '@/lib/supabase/client';
 import { EquipmentVerification, InventoryItem, OwnershipTransfer } from '@/types/inventory';
-import { initialInventoryItems } from '@/data/initialInventory';
 import { normalizeYearAcquired } from '@/lib/inventoryFormatting';
 
 const LOCAL_STORAGE_KEY = 'ict_inventory_data_v3';
@@ -104,7 +103,7 @@ export function sanitizeInventoryItems(items: InventoryItem[]): { items: Invento
 // Helper to get local data safely with automatic deduplication
 export function getLocalItems(): InventoryItem[] {
   if (typeof window === 'undefined') {
-    return sanitizeInventoryItems(initialInventoryItems).items;
+    return [];
   }
   try {
     let raw = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -117,13 +116,11 @@ export function getLocalItems(): InventoryItem[] {
     }
 
     if (!raw) {
-      const clean = sanitizeInventoryItems(initialInventoryItems).items;
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(clean));
-      return clean;
+      return [];
     }
 
     const parsed = JSON.parse(raw);
-    const candidateList = Array.isArray(parsed) && parsed.length > 0 ? parsed : initialInventoryItems;
+    const candidateList = Array.isArray(parsed) ? parsed : [];
     const { items: cleanItems, modified } = sanitizeInventoryItems(candidateList);
 
     if (modified || !localStorage.getItem(LOCAL_STORAGE_KEY)) {
@@ -131,9 +128,20 @@ export function getLocalItems(): InventoryItem[] {
     }
 
     return cleanItems;
-  } catch (err) {
-    console.warn('Failed to read from localStorage, using initial data:', err);
-    return sanitizeInventoryItems(initialInventoryItems).items;
+  } catch {
+    console.warn('Failed to read the local inventory cache.');
+    return [];
+  }
+}
+
+/** Remove private equipment data when a browser no longer has an authorized session. */
+export function clearLocalItems(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // Restricted storage must not block sign-out.
   }
 }
 
@@ -143,8 +151,8 @@ export function saveLocalItems(items: InventoryItem[]) {
   try {
     const { items: cleanItems } = sanitizeInventoryItems(items);
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleanItems));
-  } catch (err) {
-    console.error('Failed to save to localStorage:', err);
+  } catch {
+    console.error('Failed to save the local inventory cache.');
   }
 }
 
@@ -238,29 +246,17 @@ function mapItemToDbRow(item: InventoryItem): EquipmentDbRow {
   };
 }
 
-/**
- * Finds an equipment record for the QR verification screen. Cloud data is
- * preferred so a phone sees the same record as the office dashboard.
- */
+/** Reads a full record through the signed-in user's equipment RLS policy. */
 export async function findItemByPropertyNumber(propertyNumber: string): Promise<InventoryItem | null> {
   const normalized = propertyNumber.trim();
   if (!normalized) return null;
-
-  try {
-    const response = await fetch(`/api/public/equipment?propertyNumber=${encodeURIComponent(normalized)}`, {
-      cache: 'no-store',
-    });
-    if (response.ok) return mapDbRowToItem(await response.json() as Record<string, unknown>);
-    if (response.status !== 404) {
-      console.warn('Could not read equipment from the public equipment endpoint:', response.status);
-    }
-  } catch (err) {
-    console.warn('Could not read equipment from the public endpoint, checking local cache:', err);
-  }
-
-  return getLocalItems().find(
-    (item) => item.propertyNumber.trim().toLowerCase() === normalized.toLowerCase()
-  ) ?? null;
+  const { data, error } = await createBrowserClient()
+    .from('equipment')
+    .select('*')
+    .eq('property_number', normalized)
+    .maybeSingle();
+  if (error) throw new Error('Equipment details are temporarily unavailable.');
+  return data ? mapDbRowToItem(data) : null;
 }
 
 /**
@@ -269,36 +265,21 @@ export async function findItemByPropertyNumber(propertyNumber: string): Promise<
  */
 export async function recordQrVerification(
   item: InventoryItem,
-  actor: { id: string; email: string; name: string },
   comment?: string,
   resolveActiveRemark = false
 ): Promise<InventoryItem> {
-  const verifiedAt = new Date().toISOString();
-  const resolvedRemark = resolveActiveRemark ? item.remarks?.trim() : undefined;
-  const verification: EquipmentVerification = {
-    id: `verify-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    verifiedAt,
-    verifiedBy: actor.name.trim(),
-    verifiedByUserId: actor.id,
-    verifiedByEmail: actor.email,
-    comment: comment?.trim() || undefined,
-    remarkResolved: Boolean(resolvedRemark),
-    resolvedRemark,
-    method: 'qr',
-  };
-
-  return updateItem({
-    ...item,
-    updatedAt: verifiedAt,
-    lastVerifiedAt: verifiedAt,
-    lastVerifiedBy: actor.name,
-    verificationCount: (item.verificationCount || 0) + 1,
-    verificationHistory: [verification, ...(item.verificationHistory || [])].slice(0, 100),
-    // Clearing a note does not alter the condition category. It only removes the
-    // stale remark embedded in the reported status, which keeps staff in control.
-    remarks: resolvedRemark ? undefined : item.remarks,
-    status: resolvedRemark ? item.statusCategory : item.status,
+  if (comment && comment.trim().length > 500) throw new Error('Verification note is too long.');
+  const { data, error } = await createBrowserClient().rpc('record_equipment_verification', {
+    p_equipment_id: item.id,
+    p_comment: comment?.trim() || null,
+    p_resolve_remark: resolveActiveRemark,
   });
+  if (error || !data) throw new Error('Equipment verification could not be saved.');
+  const persisted = mapDbRowToItem(data as Record<string, unknown>);
+  const localItems = getLocalItems();
+  saveLocalItems(localItems.map((existing) => existing.propertyNumber === persisted.propertyNumber ? persisted : existing));
+  broadcastLocalChange('verify', persisted.id);
+  return persisted;
 }
 
 /**
@@ -315,15 +296,15 @@ export async function loadInventory(): Promise<{ items: InventoryItem[]; status:
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.warn('Supabase query error (falling back to local cache):', error.message);
+      console.warn('The equipment query failed; using the local inventory cache.');
       return {
         items: localItems,
         status: {
           source: 'local',
           isConnectedToSupabase: false,
-          message: error.message.includes('relation')
+          message: error.code === '42P01'
             ? 'Supabase table not created yet. Run the SQL schema to enable live DB sync.'
-            : error.message,
+            : 'The cloud inventory is temporarily unavailable.',
         },
       };
     }
@@ -347,7 +328,7 @@ export async function loadInventory(): Promise<{ items: InventoryItem[]; status:
             status: {
               source: 'local',
               isConnectedToSupabase: true,
-              message: `Connected to Supabase, but automatic equipment sync failed: ${syncResult.error || 'Unknown error'}`,
+            message: 'Connected to Supabase, but automatic equipment sync failed.',
             },
           };
         }
@@ -374,14 +355,13 @@ export async function loadInventory(): Promise<{ items: InventoryItem[]; status:
         message: `Synchronized live with Supabase PostgreSQL (${dbItems.length} records).`,
       },
     };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Connection failed';
+  } catch {
     return {
       items: localItems,
       status: {
         source: 'local',
         isConnectedToSupabase: false,
-        message: msg,
+        message: 'The cloud inventory is temporarily unavailable.',
       },
     };
   }
@@ -404,7 +384,7 @@ export async function createItem(newItem: Omit<InventoryItem, 'id' | 'createdAt'
     .insert([{ id: createEquipmentId(), ...mapItemToDbRow(itemToInsert) }])
     .select()
     .single();
-  if (error || !data) throw new Error(error?.message || 'Equipment could not be saved to Supabase.');
+  if (error || !data) throw new Error('Equipment could not be saved to Supabase.');
 
   const persisted = mapDbRowToItem(data);
   if (!isPersistedItem(persisted)) {
@@ -432,7 +412,7 @@ export async function updateItem(item: InventoryItem): Promise<InventoryItem> {
     : supabase.from('equipment').update(mapItemToDbRow(normalizedItem)).eq('property_number', normalizedItem.propertyNumber).select().single();
 
   const { data, error } = await query;
-  if (error || !data) throw new Error(error?.message || 'Equipment could not be updated in Supabase.');
+  if (error || !data) throw new Error('Equipment could not be updated in Supabase.');
 
   const persisted = mapDbRowToItem(data);
   const localItems = getLocalItems();
@@ -480,7 +460,7 @@ export async function transferItemOwnership(
       .maybeSingle();
 
     if (insertError) {
-      throw new Error(insertError.message || 'Equipment could not be synced to Supabase before transfer.');
+      throw new Error('Equipment could not be synced to Supabase before transfer.');
     }
 
     let row = inserted;
@@ -491,7 +471,7 @@ export async function transferItemOwnership(
         .eq('property_number', item.propertyNumber.trim())
         .maybeSingle();
       if (readError || !existing) {
-        throw new Error(readError?.message || 'Equipment could not be found in Supabase after syncing.');
+        throw new Error('Equipment could not be found in Supabase after syncing.');
       }
       row = existing;
     }
@@ -505,7 +485,7 @@ export async function transferItemOwnership(
         .select('*')
         .maybeSingle();
       if (repairError || !repaired) {
-        throw new Error(repairError?.message || 'Supabase returned a record without an ID and could not repair it. Apply the updated Supabase schema, then retry.');
+        throw new Error('Supabase returned a record without an ID and could not repair it. Apply the updated Supabase schema, then retry.');
       }
       row = repaired;
     }
@@ -540,7 +520,7 @@ export async function transferItemOwnership(
     if (error?.code === '22023' && /reason/i.test(error.message)) {
       throw new Error('This Supabase database still requires a transfer reason. Open Cloud Sync Assistant and apply the updated SQL schema to make it optional, then try again.');
     }
-    throw new Error(error?.message || 'The ownership transfer could not be recorded.');
+    throw new Error('The ownership transfer could not be recorded.');
   }
 
   const resultRow = Array.isArray(data) ? data[0] : data;
@@ -580,11 +560,11 @@ export function subscribeToInventoryChanges(onChange: () => void): () => void {
       )
       .subscribe((status, err) => {
         if (err) {
-          console.warn('Supabase Realtime status:', status, err);
+          console.warn('Supabase Realtime connection failed:', status);
         }
       });
-  } catch (err) {
-    console.warn('Live cloud subscription unavailable:', err);
+  } catch {
+    console.warn('Live cloud subscription unavailable.');
   }
 
   // 2. BroadcastChannel for instant cross-tab / cross-window sync
@@ -674,7 +654,7 @@ export async function deleteItem(id: string, propertyNumber: string): Promise<bo
     ? supabase.from('equipment').delete().eq('id', id).select('id').maybeSingle()
     : supabase.from('equipment').delete().eq('property_number', propertyNumber).select('id').maybeSingle();
   const { data, error } = await query;
-  if (error || !data) throw new Error(error?.message || 'Equipment could not be deleted from Supabase.');
+  if (error || !data) throw new Error('Equipment could not be deleted from Supabase.');
 
   const updatedLocal = getLocalItems().filter((it) => it.id !== id && it.propertyNumber !== propertyNumber);
   saveLocalItems(updatedLocal);
@@ -725,7 +705,7 @@ export async function pushAllToSupabase(
         .select('*');
 
       if (error) {
-        return { success: false, count: 0, error: error.message };
+        return { success: false, count: 0, error: 'Equipment could not be synchronized to Supabase.' };
       }
       for (const row of data || []) {
         const persisted = mapDbRowToItem(row as Record<string, unknown>);
@@ -740,8 +720,7 @@ export async function pushAllToSupabase(
     broadcastLocalChange('sync');
 
     return { success: true, count: safeRows.length };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Batch push failed';
-    return { success: false, count: 0, error: msg };
+  } catch {
+    return { success: false, count: 0, error: 'Equipment could not be synchronized to Supabase.' };
   }
 }

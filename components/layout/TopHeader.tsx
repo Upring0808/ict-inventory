@@ -35,7 +35,7 @@ export function TopHeader({
   isRefreshing,
 }: TopHeaderProps) {
   const { profile, signOut } = useAuth();
-  const { isDark, themeMode, toggleTheme } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const avatarFailed = Boolean(profile?.avatarUrl && failedAvatarUrl === profile.avatarUrl);
@@ -197,9 +197,9 @@ export function TopHeader({
             onClick={toggleTheme}
             type="button"
             className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-2xs transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            title={themeMode === 'system' ? `Switch to ${isDark ? 'light' : 'dark'} appearance` : 'Use device appearance'}
-            aria-label={themeMode === 'system' ? `Switch to ${isDark ? 'light' : 'dark'} appearance` : 'Use device appearance'}
-            aria-pressed={themeMode !== 'system'}
+            title={`Switch to ${isDark ? 'light' : 'dark'} appearance`}
+            aria-label={`Switch to ${isDark ? 'light' : 'dark'} appearance`}
+            aria-pressed={isDark}
           >
             {isDark ? (
               <svg className="h-4 w-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -2,12 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 
 type ThemeMode = 'system' | 'light' | 'dark';
 
 interface ThemeContextValue {
   isDark: boolean;
-  themeMode: ThemeMode;
   toggleTheme: () => void;
 }
 
@@ -23,23 +23,56 @@ function readThemeMode(): ThemeMode {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themeMode, setThemeMode] = useState<ThemeMode>('system');
   const [isDark, setIsDark] = useState(false);
   const themeModeRef = useRef<ThemeMode>('system');
   const targetDarkRef = useRef(false);
+  const transitionRequestRef = useRef(0);
 
-  const applyTheme = useCallback((nextMode: ThemeMode, nextDark: boolean) => {
+  const commitTheme = useCallback((nextMode: ThemeMode, nextDark: boolean) => {
     themeModeRef.current = nextMode;
     targetDarkRef.current = nextDark;
     document.documentElement.classList.toggle('dark', nextDark);
-    setThemeMode(nextMode);
-    setIsDark(nextDark);
+    flushSync(() => setIsDark(nextDark));
     try {
       window.localStorage.setItem('theme', nextMode);
     } catch {
       // The in-memory preference still works when browser storage is unavailable.
     }
   }, []);
+
+  const changeTheme = useCallback((nextMode: ThemeMode, nextDark: boolean) => {
+    if (themeModeRef.current === nextMode && targetDarkRef.current === nextDark) return;
+
+    themeModeRef.current = nextMode;
+    targetDarkRef.current = nextDark;
+    const request = ++transitionRequestRef.current;
+    const root = document.documentElement;
+    const transitionDocument = document as Document & {
+      startViewTransition?: (updateCallback: () => void) => { finished: Promise<void> };
+    };
+
+    if (
+      transitionDocument.startViewTransition &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      try {
+        const transition = transitionDocument.startViewTransition(() => {
+          if (request !== transitionRequestRef.current) return;
+          root.classList.add('theme-transitioning');
+          commitTheme(nextMode, nextDark);
+        });
+        const finish = () => {
+          if (request === transitionRequestRef.current) root.classList.remove('theme-transitioning');
+        };
+        void transition.finished.then(finish, finish);
+        return;
+      } catch {
+        root.classList.remove('theme-transitioning');
+      }
+    }
+
+    commitTheme(nextMode, nextDark);
+  }, [commitTheme]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -51,13 +84,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.classList.toggle('dark', initialDark);
     const initialStateTimer = window.setTimeout(() => {
       if (themeModeRef.current !== initialMode || targetDarkRef.current !== initialDark) return;
-      setThemeMode(initialMode);
       setIsDark(initialDark);
     }, 0);
 
     const followSystemPreference = () => {
       if (themeModeRef.current !== 'system') return;
-      applyTheme('system', media.matches);
+      changeTheme('system', media.matches);
     };
 
     media.addEventListener('change', followSystemPreference);
@@ -65,20 +97,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(initialStateTimer);
       media.removeEventListener('change', followSystemPreference);
     };
-  }, [applyTheme]);
+  }, [changeTheme]);
 
-  const toggleTheme = () => {
-    const nextMode: ThemeMode = themeModeRef.current === 'system'
-      ? (targetDarkRef.current ? 'light' : 'dark')
-      : 'system';
-    const nextDark = nextMode === 'system'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches
-      : nextMode === 'dark';
-    applyTheme(nextMode, nextDark);
-  };
+  const toggleTheme = useCallback(() => {
+    const nextDark = !targetDarkRef.current;
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const nextMode: ThemeMode = nextDark === systemDark
+      ? 'system'
+      : nextDark ? 'dark' : 'light';
+    changeTheme(nextMode, nextDark);
+  }, [changeTheme]);
 
   return (
-    <ThemeContext.Provider value={{ isDark, themeMode, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

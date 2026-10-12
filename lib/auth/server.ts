@@ -1,7 +1,10 @@
 import 'server-only';
 
 import { createClient, type User } from '@supabase/supabase-js';
+import { verifiedSessionId, verifiedTokenIssuedAt } from '@/lib/security/tokenClaims';
 import { createServerClient } from '@/lib/supabase/server';
+
+export { verifiedSessionId, hasRecentRecoveryProof } from '@/lib/security/tokenClaims';
 
 export interface AuthorizedAccountRow {
   id: string;
@@ -20,19 +23,6 @@ export interface AuthorizedActor {
   accountId: string;
   sessionId: string | null;
   authUser: User;
-}
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export function verifiedSessionId(token: string, userId: string): string | null {
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')) as Record<string, unknown>;
-    return payload.sub === userId && typeof payload.session_id === 'string' && UUID_PATTERN.test(payload.session_id)
-      ? payload.session_id
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 function requiredEnv(name: string, value: string | undefined): string {
@@ -79,6 +69,74 @@ export function validEmail(value: string): boolean {
 
 export function validPassword(value: string): boolean {
   return value.length >= 12 && value.length <= 128;
+}
+
+/** A fresh password proof for sensitive changes; the short-lived proof session is revoked. */
+export async function verifyCurrentPassword(email: string, userId: string, password: string): Promise<boolean> {
+  if (!password || password.length > 128) return false;
+  const { data, error } = await createPublicAuthClient().auth.signInWithPassword({ email, password });
+  if (error) {
+    if (error.status === 400 || error.status === 401 || error.status === 403) return false;
+    throw error;
+  }
+  if (!data.session) return false;
+  const matchesUser = data.user?.id === userId;
+  const { error: revokeError } = await createAdminClient().auth.admin.signOut(data.session.access_token, 'local');
+  if (revokeError) throw revokeError;
+  return matchesUser;
+}
+
+interface UserUpdateResult {
+  ok: boolean;
+  status: number;
+  email: string | null;
+}
+
+/** Use the user's verified bearer token so Supabase runs its confirmation and notification flows. */
+export async function updateAuthUserWithToken(
+  token: string,
+  changes: { email?: string; password?: string; current_password?: string },
+): Promise<UserUpdateResult> {
+  const url = requiredEnv('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const key = requiredEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  const response = await fetch(new URL('/auth/v1/user', url), {
+    method: 'PUT',
+    headers: { apikey: key, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(changes),
+    cache: 'no-store',
+  });
+  if (!response.ok) return { ok: false, status: response.status, email: null };
+  const result = await response.json() as Record<string, unknown>;
+  return { ok: true, status: response.status, email: typeof result.email === 'string' ? normalizeEmail(result.email) : null };
+}
+
+/** Reauthenticate in a new session before initiating a credential change. */
+export async function changeCredentialsWithCurrentPassword(
+  email: string,
+  userId: string,
+  currentPassword: string,
+  changes: { email?: string; password?: string },
+): Promise<{ verified: false } | { verified: true; update: UserUpdateResult }> {
+  if (!currentPassword || currentPassword.length > 128) return { verified: false };
+  const { data, error } = await createPublicAuthClient().auth.signInWithPassword({ email, password: currentPassword });
+  if (error) {
+    if (error.status === 400 || error.status === 401 || error.status === 403) return { verified: false };
+    throw error;
+  }
+  if (!data.session || data.user?.id !== userId) {
+    if (data.session) {
+      const { error: revokeError } = await createAdminClient().auth.admin.signOut(data.session.access_token, 'local');
+      if (revokeError) throw revokeError;
+    }
+    return { verified: false };
+  }
+  try {
+    const update = await updateAuthUserWithToken(data.session.access_token, { ...changes, current_password: currentPassword });
+    return { verified: true, update };
+  } finally {
+    const { error: revokeError } = await createAdminClient().auth.admin.signOut(data.session.access_token, 'local');
+    if (revokeError) console.error('A credential proof session could not be revoked.');
+  }
 }
 
 export async function findAuthUserByEmail(email: string): Promise<User | null> {
@@ -175,12 +233,16 @@ export async function getAuthorizedActor(request: Request): Promise<AuthorizedAc
   const admin = createAdminClient();
   const { data: accounts, error } = await admin
     .from('authorized_accounts')
-    .select('id,email,username,full_name,auth_user_id,created_at')
+    .select('id,email,username,full_name,auth_user_id,created_at,password_updated_at')
     .limit(2);
 
   if (error) throw error;
   const account = accounts?.find((candidate) => normalizeEmail(candidate.email) === userEmail);
   if (!account) return null;
+  if (account.password_updated_at) {
+    const issuedAt = verifiedTokenIssuedAt(token, user.id);
+    if (!issuedAt || issuedAt <= Math.floor(Date.parse(account.password_updated_at) / 1000)) return null;
+  }
   if (!await ensureAuthorizedIdentityLink(account.id, account.auth_user_id, user.id)) return null;
 
   const metadata = user.user_metadata as Record<string, unknown> | null;

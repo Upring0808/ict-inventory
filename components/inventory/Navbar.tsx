@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useTheme } from '@/components/theme/ThemeProvider';
 import { SyncStatus } from '@/lib/inventoryService';
 
 interface NavbarProps {
@@ -22,26 +23,7 @@ export function Navbar({
   onRefresh,
   isRefreshing,
 }: NavbarProps) {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setIsDark(document.documentElement.classList.contains('dark'));
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
-  const toggleTheme = () => {
-    const nextDark = !isDark;
-    setIsDark(nextDark);
-    if (nextDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  };
+  const { isDark, toggleTheme } = useTheme();
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/90 backdrop-blur-md dark:border-zinc-800/80 dark:bg-zinc-950/90 transition-colors">
@@ -81,7 +63,8 @@ export function Navbar({
             type="button"
             className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
             title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            aria-label="Toggle dark mode"
+            aria-label={`Switch to ${isDark ? 'light' : 'dark'} appearance`}
+            aria-pressed={isDark}
           >
             {isDark ? (
               // Sun icon for dark mode

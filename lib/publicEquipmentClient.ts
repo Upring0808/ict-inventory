@@ -1,8 +1,9 @@
 import type { EquipmentVerification, InventoryItem } from '@/types/inventory';
+import type { PublicEquipmentSummary } from '@/lib/publicEquipmentSummary';
 import { createBrowserClient } from '@/lib/supabase/client';
 import { normalizeYearAcquired } from '@/lib/inventoryFormatting';
 
-function mapPublicEquipment(row: Record<string, unknown>): InventoryItem {
+function mapAuthorizedEquipment(row: Record<string, unknown>): InventoryItem {
   const verificationHistory = Array.isArray(row.verification_history)
     ? row.verification_history as EquipmentVerification[]
     : [];
@@ -43,7 +44,9 @@ function mapPublicEquipment(row: Record<string, unknown>): InventoryItem {
   };
 }
 
-export async function findPublicEquipment(propertyNumber: string): Promise<InventoryItem | null> {
+export type PublicEquipment = PublicEquipmentSummary;
+
+export async function findPublicEquipment(propertyNumber: string): Promise<PublicEquipment | null> {
   const normalized = propertyNumber.trim();
   if (!normalized) return null;
 
@@ -51,58 +54,38 @@ export async function findPublicEquipment(propertyNumber: string): Promise<Inven
     cache: 'no-store',
   });
   if (response.status === 404) return null;
-  if (!response.ok) throw new Error('Equipment details are temporarily unavailable.');
-  return mapPublicEquipment(await response.json() as Record<string, unknown>);
+  if (!response.ok) throw new Error('Equipment verification is temporarily unavailable.');
+  const result = await response.json() as Record<string, unknown>;
+  if (result.registered !== true || result.propertyNumber !== normalized) {
+    throw new Error('Equipment verification returned an invalid response.');
+  }
+  return { propertyNumber: normalized, registered: true };
+}
+
+/** Full records are read with the user's session and the equipment RLS policy. */
+export async function findAuthorizedEquipment(propertyNumber: string): Promise<InventoryItem | null> {
+  const normalized = propertyNumber.trim();
+  if (!normalized) return null;
+  const { data, error } = await createBrowserClient()
+    .from('equipment')
+    .select('*')
+    .eq('property_number', normalized)
+    .maybeSingle();
+  if (error) throw new Error('Equipment details are temporarily unavailable.');
+  return data ? mapAuthorizedEquipment(data) : null;
 }
 
 export async function recordPublicQrVerification(
   item: InventoryItem,
-  actor: { id: string; email: string; name: string },
   comment?: string,
   resolveActiveRemark = false
 ): Promise<InventoryItem> {
-  const verifiedAt = new Date().toISOString();
-  const resolvedRemark = resolveActiveRemark ? item.remarks?.trim() : undefined;
-  const verification: EquipmentVerification = {
-    id: `verify-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    verifiedAt,
-    verifiedBy: actor.name.trim(),
-    verifiedByUserId: actor.id,
-    verifiedByEmail: actor.email,
-    comment: comment?.trim() || undefined,
-    remarkResolved: Boolean(resolvedRemark),
-    resolvedRemark,
-    method: 'qr',
-  };
-
-  const updates: Record<string, unknown> = {
-    last_verified_at: verifiedAt,
-    last_verified_by: actor.name,
-    verification_count: (item.verificationCount || 0) + 1,
-    verification_history: [verification, ...(item.verificationHistory || [])].slice(0, 100),
-  };
-
-  if (resolvedRemark) {
-    updates.remarks = null;
-    updates.status = item.statusCategory;
-  }
-
-  const supabase = createBrowserClient();
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
-  const query = isUuid
-    ? supabase.from('equipment').update(updates).eq('id', item.id).select('id').maybeSingle()
-    : supabase.from('equipment').update(updates).eq('property_number', item.propertyNumber).select('id').maybeSingle();
-  const { data, error } = await query;
-  if (error || !data) throw new Error(error?.message || 'This account cannot record equipment verification.');
-
-  return {
-    ...item,
-    updatedAt: verifiedAt,
-    lastVerifiedAt: verifiedAt,
-    lastVerifiedBy: actor.name,
-    verificationCount: (item.verificationCount || 0) + 1,
-    verificationHistory: [verification, ...(item.verificationHistory || [])].slice(0, 100),
-    remarks: resolvedRemark ? undefined : item.remarks,
-    status: resolvedRemark ? item.statusCategory : item.status,
-  };
+  if (comment && comment.trim().length > 500) throw new Error('Verification note is too long.');
+  const { data, error } = await createBrowserClient().rpc('record_equipment_verification', {
+    p_equipment_id: item.id,
+    p_comment: comment?.trim() || null,
+    p_resolve_remark: resolveActiveRemark,
+  });
+  if (error || !data) throw new Error('This account cannot record equipment verification.');
+  return mapAuthorizedEquipment(data as Record<string, unknown>);
 }

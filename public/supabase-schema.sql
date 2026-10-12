@@ -93,6 +93,18 @@ create unique index if not exists idx_authorized_accounts_email_lower
 create unique index if not exists idx_authorized_accounts_username_lower
   on public.authorized_accounts (lower(username)) where username is not null;
 
+-- A confirmed Auth email change must match an app request that rechecked the
+-- account holder's current password. Browser roles cannot create approvals.
+create table if not exists public.pending_account_email_changes (
+  auth_user_id uuid primary key references auth.users(id) on delete cascade,
+  account_id uuid not null references public.authorized_accounts(id) on delete cascade,
+  new_email text not null,
+  requested_at timestamptz not null default clock_timestamp()
+);
+alter table public.pending_account_email_changes enable row level security;
+revoke all on public.pending_account_email_changes from public, anon, authenticated;
+grant select, insert, update, delete on public.pending_account_email_changes to service_role;
+
 create table if not exists public.activity_log (
   id bigint generated always as identity primary key,
   actor_user_id uuid,
@@ -169,6 +181,10 @@ as $$
     from public.authorized_accounts as account
     where account.auth_user_id = auth.uid()
       and lower(account.email) = lower(auth.jwt() ->> 'email')
+      and (
+        account.password_updated_at is null
+        or (auth.jwt() ->> 'iat')::bigint > extract(epoch from account.password_updated_at)::bigint
+      )
   );
 $$;
 
@@ -237,7 +253,10 @@ begin
       end if;
     end loop;
     if new.password_updated_at is distinct from old.password_updated_at then
-      v_details := v_details || jsonb_build_object('password_reset', true);
+      v_details := v_details || jsonb_build_object(
+        case when new.email is distinct from old.email then 'email_change' else 'password_reset' end,
+        true
+      );
     end if;
   else
     v_action := 'account.deleted';
@@ -272,7 +291,7 @@ begin
     case when v_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then v_session_id::uuid else null end,
     v_connection.ip_address, v_connection.city, v_connection.region,
     v_connection.country, v_connection.latitude, v_connection.longitude,
-    v_connection.accuracy_meters, v_connection.location_captured_at, v_connection.device_model,
+    v_connection.accuracy_meters, v_connection.location_captured_at, null,
     v_connection.device_description, v_connection.last_seen_at
   );
 
@@ -285,6 +304,53 @@ drop trigger if exists audit_authorized_account_change on public.authorized_acco
 create trigger audit_authorized_account_change
   after insert or update or delete on public.authorized_accounts
   for each row execute function public.audit_authorized_account_change();
+
+-- Follow a confirmed Supabase Auth email change and invalidate JWTs issued
+-- before a password/email change, including changes made outside this app.
+create or replace function public.sync_authorized_account_auth_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_account_id uuid;
+  v_approved_user_id uuid;
+begin
+  if new.email is distinct from old.email then
+    select id into v_account_id from public.authorized_accounts
+    where auth_user_id = new.id;
+    if v_account_id is not null then
+      select auth_user_id into v_approved_user_id
+      from public.pending_account_email_changes
+      where auth_user_id = new.id
+        and account_id = v_account_id
+        and new_email = lower(trim(coalesce(new.email, '')))
+        and requested_at >= clock_timestamp() - interval '24 hours'
+      for update;
+      if v_approved_user_id is null then
+        raise exception using errcode = '42501', message = 'Confirm an email change requested in the inventory application.';
+      end if;
+      delete from public.pending_account_email_changes where auth_user_id = new.id;
+    end if;
+  end if;
+  if new.email is distinct from old.email
+    or new.encrypted_password is distinct from old.encrypted_password then
+    update public.authorized_accounts
+    set email = case when nullif(trim(coalesce(new.email, '')), '') is not null
+        then lower(trim(new.email)) else email end,
+        password_updated_at = clock_timestamp(),
+        updated_at = clock_timestamp()
+    where auth_user_id = new.id;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.sync_authorized_account_auth_change() from public, anon, authenticated;
+drop trigger if exists sync_authorized_account_auth_change on auth.users;
+create trigger sync_authorized_account_auth_change
+  after update of email, encrypted_password on auth.users
+  for each row execute function public.sync_authorized_account_auth_change();
 
 create or replace function public.manage_authorized_account(
   p_operation text,
@@ -313,7 +379,21 @@ begin
   perform set_config('app.actor_name', coalesce(p_actor_name, ''), true);
   perform set_config('app.session_id', coalesce(p_session_id::text, ''), true);
 
-  if p_operation = 'create' then
+  if p_operation = 'bootstrap' then
+    perform pg_advisory_xact_lock(706091202);
+    if exists (select 1 from public.authorized_accounts) then
+      raise exception using errcode = '23514', message = 'Initial setup has already been completed.';
+    end if;
+    insert into public.authorized_accounts (
+      email, username, full_name, auth_user_id
+    ) values (
+      lower(trim(p_email)),
+      nullif(lower(trim(coalesce(p_username, ''))), ''),
+      trim(p_full_name),
+      p_auth_user_id
+    ) returning id into v_id;
+    return v_id;
+  elsif p_operation = 'create' then
     insert into public.authorized_accounts (
       email, username, full_name, auth_user_id, password_updated_at
     ) values (
@@ -356,10 +436,22 @@ $$;
 revoke all on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean, uuid) from public, anon, authenticated;
 grant execute on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean, uuid) to service_role;
 
+-- Older overloads may survive CREATE OR REPLACE. Keep rolling upgrades working
+-- while ensuring they cannot be called with anon or authenticated credentials.
+do $$
+begin
+  if to_regprocedure('public.manage_authorized_account(text,uuid,text,text,text,uuid,uuid,text,text,boolean)') is not null then
+    revoke all on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean) from public, anon, authenticated;
+    grant execute on function public.manage_authorized_account(text, uuid, text, text, text, uuid, uuid, text, text, boolean) to service_role;
+  end if;
+end;
+$$;
+
 -- Only the authenticated Next.js route calls this service-role function.
 -- Browser coordinates are user/device reported and are not a trusted geofence.
 -- Keep the old signature during upgrades so the existing app can run until
 -- the new version is deployed; PostgREST selects this overload by its arguments.
+-- Model and raw user-agent arguments remain for RPC compatibility and are discarded below.
 create or replace function public.record_account_session(
   p_session_id uuid,
   p_account_id uuid,
@@ -436,8 +528,8 @@ begin
     ) values (
       p_session_id, p_account_id, p_auth_user_id, v_now, v_now,
       case when p_event = 'ended' then v_now else null end,
-      p_ip_address, p_city, p_region, p_country, p_device_model,
-      p_device_description, p_user_agent, v_latitude, v_longitude,
+      p_ip_address, p_city, p_region, p_country, null,
+      p_device_description, null, v_latitude, v_longitude,
       v_accuracy_meters, v_location_captured_at
     );
     v_action := case
@@ -454,7 +546,6 @@ begin
       or v_previous.city is distinct from p_city
       or v_previous.region is distinct from p_region
       or v_previous.country is distinct from p_country
-      or v_previous.device_model is distinct from p_device_model
       or v_previous.device_description is distinct from p_device_description then
       v_action := 'auth.connection_changed';
     end if;
@@ -469,9 +560,9 @@ begin
         longitude = v_longitude,
         accuracy_meters = v_accuracy_meters,
         location_captured_at = v_location_captured_at,
-        device_model = p_device_model,
+        device_model = null,
         device_description = p_device_description,
-        user_agent = p_user_agent
+        user_agent = null
     where session_id = p_session_id;
   end if;
 
@@ -488,7 +579,7 @@ begin
       'Sign-in session', jsonb_build_object('session', left(p_session_id::text, 8)),
       p_session_id, p_ip_address, p_city, p_region, p_country,
       v_latitude, v_longitude, v_accuracy_meters, v_location_captured_at,
-      p_device_model, p_device_description, v_now
+      null, p_device_description, v_now
     );
   end if;
 end;
@@ -496,6 +587,14 @@ $$;
 
 revoke all on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text, double precision, double precision, double precision, timestamptz) from public, anon, authenticated;
 grant execute on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text, double precision, double precision, double precision, timestamptz) to service_role;
+do $$
+begin
+  if to_regprocedure('public.record_account_session(uuid,uuid,uuid,text,text,text,inet,text,text,text,text,text,text)') is not null then
+    revoke all on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text) from public, anon, authenticated;
+    grant execute on function public.record_account_session(uuid, uuid, uuid, text, text, text, inet, text, text, text, text, text, text) to service_role;
+  end if;
+end;
+$$;
 
 -- Custody is changed only by the transfer function below. Direct updates must
 -- not silently rewrite the custodian or the receipt history.
@@ -520,6 +619,102 @@ drop trigger if exists guard_equipment_ownership on public.equipment;
 create trigger guard_equipment_ownership
   before update on public.equipment
   for each row execute function public.guard_equipment_ownership();
+
+-- Check-in metadata is stamped by a database function, never by a browser update.
+create or replace function public.guard_equipment_verification()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.last_verified_at is distinct from old.last_verified_at
+    or new.last_verified_by is distinct from old.last_verified_by
+    or new.verification_count is distinct from old.verification_count
+    or new.verification_history is distinct from old.verification_history then
+    if current_setting('app.equipment_verification', true) is distinct from 'true' then
+      raise exception using errcode = '23514', message = 'Use equipment check-in to update verification history.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_equipment_verification on public.equipment;
+create trigger guard_equipment_verification
+  before update on public.equipment
+  for each row execute function public.guard_equipment_verification();
+
+create or replace function public.record_equipment_verification(
+  p_equipment_id uuid,
+  p_comment text,
+  p_resolve_remark boolean
+)
+returns public.equipment
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_equipment public.equipment;
+  v_actor_name text;
+  v_actor_email text := lower(auth.jwt() ->> 'email');
+  v_comment text := trim(coalesce(p_comment, ''));
+  v_verified_at timestamptz := clock_timestamp();
+  v_receipt jsonb;
+  v_history jsonb;
+begin
+  if not public.is_authorized_inventory_user() then
+    raise exception using errcode = '42501', message = 'You are not authorized to verify equipment.';
+  end if;
+  if length(v_comment) > 500 then
+    raise exception using errcode = '22023', message = 'Verification note is too long.';
+  end if;
+  select full_name into v_actor_name from public.authorized_accounts
+  where auth_user_id = auth.uid() and lower(email) = v_actor_email;
+  if v_actor_name is null then
+    raise exception using errcode = '42501', message = 'Authorized account was not found.';
+  end if;
+
+  select * into v_equipment from public.equipment where id = p_equipment_id for update;
+  if not found then
+    raise exception using errcode = 'P0002', message = 'Equipment was not found.';
+  end if;
+  v_receipt := jsonb_build_object(
+    'id', gen_random_uuid()::text,
+    'verifiedAt', v_verified_at,
+    'verifiedBy', v_actor_name,
+    'verifiedByUserId', auth.uid()::text,
+    'verifiedByEmail', v_actor_email,
+    'method', 'qr',
+    'remarkResolved', coalesce(p_resolve_remark, false) and nullif(trim(coalesce(v_equipment.remarks, '')), '') is not null
+  );
+  if v_comment <> '' then v_receipt := v_receipt || jsonb_build_object('comment', v_comment); end if;
+  if coalesce(p_resolve_remark, false) and nullif(trim(coalesce(v_equipment.remarks, '')), '') is not null then
+    v_receipt := v_receipt || jsonb_build_object('resolvedRemark', trim(v_equipment.remarks));
+  end if;
+
+  select coalesce(jsonb_agg(entry.value order by entry.ordinality), '[]'::jsonb)
+    into v_history
+  from jsonb_array_elements(jsonb_build_array(v_receipt) || coalesce(v_equipment.verification_history, '[]'::jsonb))
+    with ordinality as entry(value, ordinality)
+  where entry.ordinality <= 100;
+
+  perform set_config('app.equipment_verification', 'true', true);
+  update public.equipment
+  set last_verified_at = v_verified_at,
+      last_verified_by = v_actor_name,
+      verification_count = v_equipment.verification_count + 1,
+      verification_history = v_history,
+      remarks = case when coalesce(p_resolve_remark, false) then null else v_equipment.remarks end,
+      status = case when coalesce(p_resolve_remark, false) and v_equipment.remarks is not null
+        then v_equipment.status_category else v_equipment.status end
+  where id = p_equipment_id returning * into v_equipment;
+  perform set_config('app.equipment_verification', '', true);
+  return v_equipment;
+end;
+$$;
+revoke all on function public.record_equipment_verification(uuid, text, boolean) from public, anon;
+grant execute on function public.record_equipment_verification(uuid, text, boolean) to authenticated;
 
 -- Row lock, old-custodian check, audit receipt, and custody update are atomic.
 -- The actor and time are supplied by Supabase Auth and PostgreSQL, not the UI.
@@ -694,7 +889,7 @@ begin
     case when v_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then v_session_id::uuid else null end,
     v_connection.ip_address, v_connection.city, v_connection.region,
     v_connection.country, v_connection.latitude, v_connection.longitude,
-    v_connection.accuracy_meters, v_connection.location_captured_at, v_connection.device_model,
+    v_connection.accuracy_meters, v_connection.location_captured_at, null,
     v_connection.device_description, v_connection.last_seen_at
   );
 
@@ -730,8 +925,8 @@ create trigger set_equipment_updated_at
   for each row execute function public.handle_updated_at();
 
 -- Remove older permissive policies and grant account access only to the two
--- records that exist in authorized_accounts. Public detail reads go through a
--- server route that returns a single requested asset; the table itself is not public.
+-- records that exist in authorized_accounts. The public QR route returns only
+-- the approved property-number summary; the table itself is not public.
 do $$
 declare
   v_policy record;
@@ -772,4 +967,59 @@ end;
 $$;
 
 -- Make newly created RPC signatures available to PostgREST immediately.
+-- Shared, atomic throttling for server routes. Only the service role may call it.
+create table if not exists public.security_rate_limits (
+  key_hash text primary key,
+  attempts integer not null,
+  reset_at timestamptz not null
+);
+alter table public.security_rate_limits enable row level security;
+create index if not exists idx_security_rate_limits_reset_at on public.security_rate_limits (reset_at);
+revoke all on public.security_rate_limits from public, anon, authenticated;
+grant select, insert, update, delete on public.security_rate_limits to service_role;
+
+create or replace function public.consume_security_rate_limit(
+  p_key text,
+  p_maximum integer,
+  p_window_seconds integer
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_attempts integer;
+  v_reset_at timestamptz;
+  v_now timestamptz := clock_timestamp();
+begin
+  if p_key !~ '^[0-9a-f]{64}$' or p_maximum < 1 or p_maximum > 1000
+    or p_window_seconds < 1 or p_window_seconds > 86400 then
+    raise exception using errcode = '22023', message = 'Invalid rate limit parameters.';
+  end if;
+
+  insert into public.security_rate_limits as limits (key_hash, attempts, reset_at)
+  values (p_key, 1, v_now + make_interval(secs => p_window_seconds))
+  on conflict (key_hash) do update
+    set attempts = case when limits.reset_at <= v_now then 1
+      else least(limits.attempts + 1, p_maximum + 1) end,
+        reset_at = case when limits.reset_at <= v_now
+          then v_now + make_interval(secs => p_window_seconds)
+          else limits.reset_at end
+  returning attempts, reset_at into v_attempts, v_reset_at;
+
+  -- Amortized cleanup keeps high-cardinality public lookups from growing forever.
+  if random() < 0.001 then
+    delete from public.security_rate_limits where reset_at < v_now - interval '1 day';
+  end if;
+
+  return jsonb_build_object(
+    'allowed', v_attempts <= p_maximum,
+    'retry_after_seconds', greatest(1, ceil(extract(epoch from v_reset_at - v_now))::integer)
+  );
+end;
+$$;
+revoke all on function public.consume_security_rate_limit(text, integer, integer) from public, anon, authenticated;
+grant execute on function public.consume_security_rate_limit(text, integer, integer) to service_role;
+
 notify pgrst, 'reload schema';

@@ -8,17 +8,20 @@ import {
 } from '@/lib/auth/server';
 import { recordAccountSession } from '@/lib/security/presence';
 import { parseBrowserLocation } from '@/lib/security/browserLocation';
+import { readJsonObject } from '@/lib/security/input';
+import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const rawPayload = await request.json().catch(() => null) as unknown;
-    if (!rawPayload || typeof rawPayload !== 'object') {
+    const payload = await readJsonObject(request);
+    const login = typeof payload?.emailOrUsername === 'string' ? payload.emailOrUsername.trim() : '';
+    const limit = await checkRateLimit(request, 'login', 30, 900, login || undefined, 8);
+    if (!limit.allowed) return rateLimitResponse(limit);
+    if (!payload) {
       return Response.json({ error: 'Invalid sign-in request.' }, { status: 400 });
     }
-    const payload = rawPayload as { emailOrUsername?: unknown; password?: unknown; location?: unknown };
-    const login = typeof payload.emailOrUsername === 'string' ? payload.emailOrUsername.trim() : '';
     const password = typeof payload.password === 'string' ? payload.password : '';
     const location = parseBrowserLocation(payload.location);
 
@@ -104,10 +107,10 @@ export async function POST(request: Request) {
           avatarUrl,
         },
       },
-      { headers: { 'Cache-Control': 'no-store', 'Accept-CH': 'Sec-CH-UA-Model, Sec-CH-UA-Platform, Sec-CH-UA-Mobile' } }
+      { headers: { 'Cache-Control': 'no-store', 'Accept-CH': 'Sec-CH-UA-Platform, Sec-CH-UA-Mobile' } }
     );
-  } catch (error) {
-    console.error('Password sign-in route could not reach Supabase:', error instanceof Error ? error.message : 'Unknown error');
+  } catch {
+    console.error('Password sign-in route could not reach Supabase.');
     return Response.json({ error: 'Sign-in is temporarily unavailable.' }, { status: 503 });
   }
 }

@@ -6,6 +6,7 @@ import { authorizedApiFetch, fetchAuthProfile, fetchWithTimeout, withDeadline } 
 import { createBrowserClient } from '@/lib/supabase/client';
 import { LOCATION_MAX_AGE_MS, parseBrowserLocation, type BrowserLocation } from '@/lib/security/browserLocation';
 import { requestBrowserLocation } from '@/lib/security/browserLocation.client';
+import { clearLocalItems } from '@/lib/inventoryService';
 
 export interface AuthProfile {
   id: string;
@@ -111,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resolveNoSession = useCallback(async (checkSetup: boolean) => {
     const operation = ++operationRef.current;
     setHasSession(false);
+    clearLocalItems();
     // A settled login/setup screen should not disappear when an OAuth tab is
     // closed or this document becomes visible again without a new session.
     if (checkSetup && (statusRef.current === 'unauthenticated' || statusRef.current === 'setup_required')) {
@@ -575,6 +577,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const { error: signOutError } = await withDeadline(client.auth.signOut({ scope: 'local' }), 8_000);
       if (signOutError) throw signOutError;
+      clearLocalItems();
       if (statusRef.current !== 'unauthenticated') await resolveNoSession(false);
     } catch {
       showUnavailable('Sign-out could not be completed. Check your connection and try again.', ++operationRef.current);

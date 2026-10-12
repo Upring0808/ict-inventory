@@ -7,9 +7,7 @@ export interface ConnectionInfo {
   city: string | null;
   region: string | null;
   country: string | null;
-  deviceModel: string | null;
   deviceDescription: string;
-  userAgent: string | null;
 }
 
 function clean(value: string | null, maxLength: number): string | null {
@@ -48,12 +46,6 @@ function platformName(userAgent: string, platformHint: string | null): string {
   return 'OS unknown';
 }
 
-function androidModel(userAgent: string): string | null {
-  const match = userAgent.match(/Android[^;)]*;\s*([^;)]+?)(?:\s+Build\/[^;)]*)?(?:;|\))/i);
-  const model = clean(match?.[1] ?? null, 80);
-  return model && model.length >= 3 && !/^(?:wv|mobile|linux|android)$/i.test(model) ? model : null;
-}
-
 export function connectionFromRequest(request: Request): ConnectionInfo {
   const headers = request.headers;
   const onVercel = process.env.VERCEL === '1';
@@ -71,8 +63,7 @@ export function connectionFromRequest(request: Request): ConnectionInfo {
   const isTablet = /iPad|Tablet/i.test(userAgent || '') || (/Android/i.test(userAgent || '') && !/Mobile/i.test(userAgent || ''));
   const isMobile = headers.get('sec-ch-ua-mobile') === '?1' || /iPhone|iPod|Mobile/i.test(userAgent || '');
   const deviceType = isTablet ? 'Tablet' : isMobile ? 'Mobile' : 'Desktop';
-  const deviceModel = clientHint(headers.get('sec-ch-ua-model'), 80) || androidModel(userAgent || '');
   const deviceDescription = `${deviceType} · ${browserName(userAgent || '')} on ${platform}`;
 
-  return { ipAddress, city, region, country, deviceModel, deviceDescription, userAgent };
+  return { ipAddress, city, region, country, deviceDescription };
 }

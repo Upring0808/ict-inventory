@@ -24,7 +24,6 @@ interface AuthorizedAccount {
     longitude: number | null;
     accuracyMeters: number | null;
     locationCapturedAt: string | null;
-    deviceModel: string | null;
     deviceDescription: string | null;
   } | null;
 }
@@ -115,6 +114,7 @@ export function AccountSettings() {
     const email = String(data.get('email') || '').trim();
     const username = String(data.get('username') || '').trim();
     const password = String(data.get('password') || '');
+    const currentPassword = String(data.get('currentPassword') || '');
     if (username && !USERNAME_PATTERN.test(username)) {
       setError('Username must be 3–32 characters using letters, numbers, dots, underscores, or hyphens.');
       setBusyId(null);
@@ -124,21 +124,25 @@ export function AccountSettings() {
     try {
       const response = await authorizedApiFetch('/api/admin/accounts', {
         method: 'PATCH',
-        body: JSON.stringify({ id: account.id, name: data.get('name'), email, username, password }),
+        body: JSON.stringify({ id: account.id, name: data.get('name'), email, username, password, currentPassword }),
       });
       if (!response.ok) throw new Error(await readApiError(response, 'The account could not be updated.'));
       const updateResult = await response.json().catch(() => null) as {
         reauthenticate?: boolean;
         emailChanged?: boolean;
+        emailChangePending?: boolean;
         passwordUpdated?: boolean;
         warning?: string;
         account?: Pick<AuthorizedAccount, 'id' | 'name' | 'email' | 'username'>;
       } | null;
       const isCurrentUser = account.isCurrentUser;
       const emailChanged = updateResult?.emailChanged === true;
+      const emailChangePending = updateResult?.emailChangePending === true;
       const passwordUpdated = updateResult?.passwordUpdated === true;
       const credentialsChanged = emailChanged || passwordUpdated;
-      const signInAgain = emailChanged && passwordUpdated
+      const signInAgain = emailChangePending && passwordUpdated
+        ? 'Your password was updated. Confirm the email change using both inboxes, then sign in with your new password.'
+        : emailChanged && passwordUpdated
         ? 'Your email and password were updated. Sign in again with both.'
         : emailChanged
           ? 'Your email address was updated. Sign in again with your new email address.'
@@ -172,7 +176,9 @@ export function AccountSettings() {
         await signOut();
         return;
       }
-      setSuccess(password ? 'Account details and password updated.' : 'Account details updated.');
+      setSuccess(emailChangePending
+        ? 'Account details saved. Confirm the email change using both your current and new inboxes.'
+        : passwordUpdated ? 'Account details and password updated.' : 'Account details updated.');
       form.reset();
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'The account could not be updated.');
@@ -283,8 +289,8 @@ export function AccountSettings() {
                               : null}
                           </p>
                           {account.lastConnection.locationCapturedAt ? <p className="mt-0.5 text-zinc-500 dark:text-zinc-400">Captured {formatSecurityTime(account.lastConnection.locationCapturedAt)}</p> : null}
-                          <p className="mt-0.5 break-all text-zinc-600 dark:text-zinc-400">IP: {account.lastConnection.ipAddress || 'Unavailable'}</p>
-                          <p className="mt-0.5 break-words text-zinc-600 dark:text-zinc-400">Model: {account.lastConnection.deviceModel || 'Unavailable'} · {account.lastConnection.deviceDescription || 'Device unavailable'}</p>
+                          <p className="mt-0.5 break-all text-zinc-600 dark:text-zinc-400"><span className="font-semibold">IP address:</span> {account.lastConnection.ipAddress || 'Unavailable'}</p>
+                          <p className="mt-0.5 break-words text-zinc-600 dark:text-zinc-400"><span className="font-semibold">Device:</span> {account.lastConnection.deviceDescription || 'Unavailable'}</p>
                         </div>
                       ) : null}
                     </div>
@@ -295,6 +301,7 @@ export function AccountSettings() {
                           <label className={labelClassName}>Email address<input name="email" type="email" autoComplete="email" defaultValue={account.email} required className={inputClassName} /></label>
                           <label className={labelClassName}>Username <span className="font-normal text-zinc-500 dark:text-zinc-400">(optional)</span><input name="username" autoComplete="username" defaultValue={account.username || ''} minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]{3,32}" className={inputClassName} /></label>
                           <label className={`${labelClassName} sm:col-span-2`}>New password <span className="font-normal text-zinc-500 dark:text-zinc-400">(leave blank to keep current)</span><input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={128} className={inputClassName} /></label>
+                          <label className={`${labelClassName} sm:col-span-2`}>Current password <span className="font-normal text-zinc-500 dark:text-zinc-400">(required when changing email or password)</span><input name="currentPassword" type="password" autoComplete="current-password" maxLength={128} className={inputClassName} /></label>
                         </div>
                         <div className="mt-3 flex justify-end">
                           <button type="submit" disabled={busyId === account.id} className="min-h-11 rounded-xl bg-zinc-900 px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white">{busyId === account.id ? 'Saving…' : 'Save my changes'}</button>

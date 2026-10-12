@@ -38,16 +38,13 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (error || !data.session) {
-      console.error('Google OAuth code exchange failed:', error?.message || 'No session was returned.');
+      console.error('Google OAuth code exchange failed.');
       return redirectAfterCallback(request, false, error?.name === 'AuthPKCECodeVerifierMissingError' ? 'browser' : 'google');
     }
 
     return response;
   } catch (callbackError) {
-    console.error(
-      'Google OAuth callback could not be completed:',
-      callbackError instanceof Error ? callbackError.message : 'Unknown error',
-    );
+    console.error('Google OAuth callback could not be completed.');
     return redirectAfterCallback(request, false, callbackError instanceof Error && callbackError.name === 'AuthPKCECodeVerifierMissingError' ? 'browser' : 'google');
   }
 }

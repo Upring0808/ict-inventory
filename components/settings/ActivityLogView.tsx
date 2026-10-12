@@ -26,7 +26,6 @@ interface ActivityEvent {
   connection_longitude: number | null;
   connection_accuracy_meters: number | null;
   connection_location_captured_at: string | null;
-  device_model: string | null;
   device_description: string | null;
   connection_observed_at: string | null;
 }
@@ -72,7 +71,6 @@ function eventSearchText(event: ActivityEvent): string {
     event.connection_country,
     event.connection_latitude,
     event.connection_longitude,
-    event.device_model,
     event.device_description,
     ...changes,
   ].filter((value) => value !== null && value !== undefined && value !== '').join(' ').toLowerCase();
@@ -128,21 +126,27 @@ function actionDotTone(action: string): string {
 
 function ConnectionDetails({ event }: { event: ActivityEvent }) {
   if (!event.connection_observed_at) {
-    return <p className="text-xs text-zinc-500 dark:text-zinc-400">{event.session_id ? `No recent check · Session ${event.session_id.slice(0, 8)}` : 'Not recorded for this event'}</p>;
+    return (
+      <div className="space-y-1 text-xs leading-4 text-zinc-700 dark:text-zinc-300">
+        <p className="break-all"><span className="font-semibold text-zinc-900 dark:text-zinc-100">IP address:</span> {event.connection_ip || 'Unavailable'}</p>
+        <p className="break-words"><span className="font-semibold text-zinc-900 dark:text-zinc-100">Device:</span> {event.device_description || 'Unavailable'}</p>
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{event.session_id ? `No recent check · Session ${event.session_id.slice(0, 8)}` : 'No connection observation recorded'}</p>
+      </div>
+    );
   }
 
   const browserLocation = formatBrowserLocation(event.connection_latitude, event.connection_longitude, event.connection_accuracy_meters);
+  const location = browserLocation || formatApproximateLocation(event.connection_city, event.connection_country) || 'Unavailable';
   const mapUrl = browserLocationMapUrl(event.connection_latitude, event.connection_longitude);
   return (
     <div className="min-w-0 space-y-1 text-xs leading-4 text-zinc-700 dark:text-zinc-300">
-      <p className="break-words font-semibold text-zinc-900 dark:text-zinc-100">{browserLocation ? `Browser location: ${browserLocation}` : formatApproximateLocation(event.connection_city, event.connection_country)}</p>
+      <p className="break-words"><span className="font-semibold text-zinc-900 dark:text-zinc-100">Location:</span> {location}</p>
       {mapUrl ? <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="inline-block font-semibold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300">View map</a> : null}
-      {event.connection_location_captured_at ? <p className="text-zinc-500 dark:text-zinc-400">Captured {formatSecurityTime(event.connection_location_captured_at)}</p> : null}
-      <p className="break-all">IP: {event.connection_ip || 'Unavailable'}</p>
-      <p className="break-words">Model: {event.device_model || 'Unavailable'}</p>
-      <p className="break-words text-zinc-500 dark:text-zinc-400">{event.device_description || 'Device unavailable'}</p>
+      {event.connection_location_captured_at ? <p className="text-zinc-500 dark:text-zinc-400"><span className="font-semibold">Location captured:</span> {formatSecurityTime(event.connection_location_captured_at)}</p> : null}
+      <p className="break-all"><span className="font-semibold text-zinc-900 dark:text-zinc-100">IP address:</span> {event.connection_ip || 'Unavailable'}</p>
+      <p className="break-words"><span className="font-semibold text-zinc-900 dark:text-zinc-100">Device:</span> {event.device_description || 'Unavailable'}</p>
       <time dateTime={event.connection_observed_at} className="block text-[11px] text-zinc-500 dark:text-zinc-400">
-        {event.action.startsWith('auth.') ? 'Checked' : 'Last session check'}: {formatSecurityTime(event.connection_observed_at)}
+        <span className="font-semibold">{event.action.startsWith('auth.') ? 'Checked:' : 'Last session check:'}</span> {formatSecurityTime(event.connection_observed_at)}
       </time>
       {event.session_id ? <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Session {event.session_id.slice(0, 8)}</p> : null}
     </div>
@@ -301,18 +305,17 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
     : events;
 
   return (
-    <section className="mx-auto w-full max-w-5xl space-y-5 pb-4 sm:space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <section className="w-full min-w-0 space-y-5 pb-4 sm:space-y-6">
+      <header className="space-y-4">
         <div>
-         
-          <h2 className="mt-1 text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl">Activity log</h2>
-          <p className="mt-1.5 text-sm leading-5 text-zinc-600 dark:text-zinc-400">See equipment changes and sign-in session checks, including observed connections.</p>
-          <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Location is reported by the browser at sign-in and during active session checks, with its estimated accuracy. IP and device details are separate. Older activity may only have approximate IP location.</p>
+          <h2 className="text-2xl font-semibold leading-tight tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-[30px]">Activity log</h2>
+          <p className="mt-1.5 max-w-[75ch] text-sm leading-5 text-zinc-600 dark:text-zinc-400">See equipment changes and sign-in session checks, including observed connections.</p>
+          <p className="mt-1 max-w-[105ch] text-xs leading-5 text-zinc-500 dark:text-zinc-400">Location is reported by the browser at sign-in and during active session checks, with its estimated accuracy. IP and device details are separate. Older activity may only have approximate IP location.</p>
         </div>
 
-        <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end">
-          <label htmlFor="activity-search" className="block sm:w-56">
-            <span className="mb-1 block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">Search loaded activity</span>
+        <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(20rem,1fr)_auto_auto] dark:border-zinc-800 dark:bg-zinc-900/50">
+          <label htmlFor="activity-search" className="block min-w-0 sm:col-span-2 xl:col-span-1">
+            <span className="mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Search loaded activity</span>
             <span className="relative block">
               <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" viewBox="0 0 20 20" fill="none" stroke="currentColor">
                 <circle cx="8.75" cy="8.75" r="5.75" strokeWidth="1.6" />
@@ -324,37 +327,39 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Name, IP, device, or change"
-                className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 shadow-sm outline-none transition placeholder:text-zinc-400 hover:border-zinc-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600"
+                className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 outline-none transition placeholder:text-zinc-500 hover:border-zinc-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:hover:border-zinc-600"
               />
             </span>
           </label>
           <label htmlFor="activity-date" className="block">
-            <span className="mb-1 block text-[11px] font-semibold text-zinc-600 dark:text-zinc-400">Filter by day</span>
+            <span className="mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Filter by day</span>
             <input
               id="activity-date"
               type="date"
               value={selectedDate}
               onChange={(event) => setSelectedDate(event.target.value)}
-              className="min-h-11 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-800 shadow-sm outline-none transition hover:border-zinc-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-zinc-600"
+              className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none transition hover:border-zinc-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 sm:w-auto dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-600"
             />
           </label>
-          {selectedDate || searchQuery ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+            {selectedDate || searchQuery ? (
+              <button
+                type="button"
+                onClick={() => { setSelectedDate(''); setSearchQuery(''); }}
+                className="min-h-11 rounded-lg px-3 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-200/70 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Clear filters
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={() => { setSelectedDate(''); setSearchQuery(''); }}
-              className="min-h-11 rounded-xl px-2.5 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-200/70 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              onClick={() => void loadEvents(true)}
+              disabled={isLoading || isRefreshing}
+              className="min-h-11 rounded-lg border border-zinc-200 bg-white px-3.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
-              Clear filters
+              {isRefreshing ? 'Refreshing…' : 'Refresh'}
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void loadEvents(true)}
-            disabled={isLoading || isRefreshing}
-            className="min-h-11 rounded-xl border border-zinc-200 bg-white px-3.5 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            {isRefreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
+          </div>
         </div>
       </header>
 
@@ -372,25 +377,28 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
         </div>
 
         {isLoading ? (
-          <div className="space-y-2 p-4 sm:p-5" role="status" aria-label="Loading activity">
-            <div className="skeleton h-16 rounded-xl" />
-            <div className="skeleton h-16 rounded-xl" />
-            <div className="skeleton h-16 rounded-xl" />
+          <div className="divide-y divide-zinc-100 px-4 dark:divide-zinc-800 sm:px-5" role="status" aria-label="Loading activity">
+            {[0, 1, 2].map((item) => (
+              <div key={item} className="grid gap-4 py-5 xl:grid-cols-[minmax(13rem,0.9fr)_minmax(0,1.6fr)_minmax(15rem,1fr)] xl:gap-6">
+                <div className="space-y-2">
+                  <div className="skeleton h-3 w-32 rounded" />
+                  <div className="skeleton h-10 w-4/5 rounded-lg" />
+                </div>
+                <div className="space-y-2">
+                  <div className="skeleton h-6 w-44 rounded-lg" />
+                  <div className="skeleton h-10 w-full rounded-lg" />
+                </div>
+                <div className="space-y-2">
+                  <div className="skeleton h-3 w-28 rounded" />
+                  <div className="skeleton h-16 w-full rounded-lg" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : events.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1160px] border-collapse text-left">
-              <thead className="bg-zinc-50/80 dark:bg-zinc-950/50">
-                <tr className="border-b border-zinc-100 dark:border-zinc-800">
-                  <th scope="col" className="w-36 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 sm:px-5 dark:text-zinc-400">Date &amp; time</th>
-                  <th scope="col" className="w-56 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 sm:px-5 dark:text-zinc-400">Account / equipment</th>
-                  <th scope="col" className="w-60 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 sm:px-5 dark:text-zinc-400">User</th>
-                  <th scope="col" className="px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 sm:px-5 dark:text-zinc-400">Change</th>
-                  <th scope="col" className="w-64 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 sm:px-5 dark:text-zinc-400">Connection observed</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {visibleEvents.length ? visibleEvents.map((event) => {
+          visibleEvents.length ? (
+            <ol aria-label="Activity log entries" className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {visibleEvents.map((event) => {
               const details = event.details || {};
               const changes = Object.entries(details).filter(([key]) => ![
                 'record', 'verification', 'transfer', 'password_reset', 'password', 'secret', 'access_token', 'refresh_token',
@@ -456,66 +464,73 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
               });
 
               return (
-                <tr key={event.id} className="align-top transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/25">
-                  <td className="px-4 py-4 text-xs sm:px-5">
-                    <time dateTime={event.occurred_at} className="block whitespace-nowrap font-medium text-zinc-700 dark:text-zinc-300">
-                      <span className="block">{formattedDate}</span>
-                      {formattedTime ? <span className="mt-0.5 block text-zinc-500 dark:text-zinc-400">{formattedTime}</span> : null}
-                    </time>
-                  </td>
-                  <td className="min-w-0 px-4 py-4 sm:px-5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">{event.target_type === 'equipment' ? 'Equipment' : event.target_type === 'session' ? 'Security session' : 'User account'}</p>
-                    <p className="mt-1 max-w-52 truncate text-[13px] font-semibold text-zinc-800 dark:text-zinc-200" title={targetLabel}>{targetLabel}</p>
-                  </td>
-                  <td className="px-4 py-4 sm:px-5">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <ActorAvatar name={actorName} imageUrl={event.actor_avatar_url} key={event.actor_avatar_url || 'no-avatar'} />
-                      <div className="min-w-0">
-                        <p className="max-w-44 truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{actorName}</p>
-                        <p className="max-w-44 truncate text-xs text-zinc-500 dark:text-zinc-400">{event.actor_email || 'Authorized user'}</p>
+                <li key={event.id} className="px-4 py-4 transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/25 sm:px-5 sm:py-5">
+                  <article className="grid min-w-0 gap-4 xl:grid-cols-[minmax(13rem,0.9fr)_minmax(0,1.6fr)_minmax(15rem,1fr)] xl:gap-6">
+                    <div className="min-w-0">
+                      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Activity</h3>
+                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">When</p>
+                      <time dateTime={event.occurred_at} className="flex flex-wrap items-center gap-x-2 text-xs font-medium tabular-nums text-zinc-600 dark:text-zinc-400">
+                        <span>{formattedDate}</span>
+                        {formattedTime ? <><span aria-hidden="true" className="text-zinc-400">·</span><span>{formattedTime}</span></> : null}
+                      </time>
+                      <p className="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Performed by</p>
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <ActorAvatar name={actorName} imageUrl={event.actor_avatar_url} key={event.actor_avatar_url || 'no-avatar'} />
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-semibold text-zinc-900 dark:text-zinc-100">{actorName}</p>
+                          <p className="break-all text-xs text-zinc-500 dark:text-zinc-400">{event.actor_email || 'Authorized user'}</p>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Affected item</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">{event.target_type === 'equipment' ? 'Equipment' : event.target_type === 'session' ? 'Security session' : 'User account'}</p>
+                        <p className="mt-0.5 break-words text-sm font-medium text-zinc-800 dark:text-zinc-200" title={targetLabel}>{targetLabel}</p>
                       </div>
                     </div>
-                  </td>
-                  <td className="min-w-0 px-4 py-4 sm:px-5">
-                    <div className="grid min-w-0 justify-items-start gap-2">
-                      <span className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold leading-4 ${actionTone(event.action)}`}>
-                        <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${actionDotTone(event.action)}`} />
-                        <span className="break-words">{actionLabel(event.action)}</span>
-                      </span>
-                      {inlineDetails.length ? <div className="grid min-w-0 gap-1.5">{inlineDetails.map((item) => <ActivityDetail key={item.id} item={item} />)}</div> : null}
-                      {expandedDetails.length ? (
-                        <details className="group w-fit max-w-full">
-                          <summary className="flex min-h-8 cursor-pointer select-none items-center gap-1.5 rounded-md px-1.5 text-xs font-semibold text-emerald-800 outline-none transition hover:bg-emerald-50 focus-visible:ring-4 focus-visible:ring-emerald-600/15 dark:text-emerald-300 dark:hover:bg-emerald-950/35">
-                            <svg aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.25 4.5a.75.75 0 0 1 1.06.02l4.25 4.5a.75.75 0 0 1 0 1.03l-4.25 4.5a.75.75 0 1 1-1.09-1.03L10.99 9.5 7.23 5.53a.75.75 0 0 1 .02-1.03Z" clipRule="evenodd" /></svg>
-                            <span className="group-open:hidden">Show {expandedDetails.length} more {expandedDetails.length === 1 ? 'detail' : 'details'}</span>
-                            <span className="hidden group-open:inline">Hide additional details</span>
-                          </summary>
-                          <div className="mt-1.5 grid min-w-0 gap-1.5">{expandedDetails.map((item) => <ActivityDetail key={item.id} item={item} />)}</div>
-                        </details>
-                      ) : detailItems.length === 0 ? <span className="text-xs text-zinc-500 dark:text-zinc-400">No extra details</span> : null}
+
+                    <div className="min-w-0">
+                      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Action made</h3>
+                      <div className="grid min-w-0 justify-items-start gap-2">
+                        <span className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold leading-4 ${actionTone(event.action)}`}>
+                          <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${actionDotTone(event.action)}`} />
+                          <span className="break-words">{actionLabel(event.action)}</span>
+                        </span>
+                        {inlineDetails.length ? <div className="grid min-w-0 gap-1.5">{inlineDetails.map((item) => <ActivityDetail key={item.id} item={item} />)}</div> : null}
+                        {expandedDetails.length ? (
+                          <details className="group w-fit max-w-full">
+                            <summary className="flex min-h-8 cursor-pointer select-none items-center gap-1.5 rounded-md px-1.5 text-xs font-semibold text-emerald-800 outline-none transition hover:bg-emerald-50 focus-visible:ring-4 focus-visible:ring-emerald-600/15 dark:text-emerald-300 dark:hover:bg-emerald-950/35">
+                              <svg aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.25 4.5a.75.75 0 0 1 1.06.02l4.25 4.5a.75.75 0 0 1 0 1.03l-4.25 4.5a.75.75 0 1 1-1.09-1.03L10.99 9.5 7.23 5.53a.75.75 0 0 1 .02-1.03Z" clipRule="evenodd" /></svg>
+                              <span className="group-open:hidden">Show {expandedDetails.length} more {expandedDetails.length === 1 ? 'detail' : 'details'}</span>
+                              <span className="hidden group-open:inline">Hide additional details</span>
+                            </summary>
+                            <div className="mt-1.5 grid min-w-0 gap-1.5">{expandedDetails.map((item) => <ActivityDetail key={item.id} item={item} />)}</div>
+                          </details>
+                        ) : detailItems.length === 0 ? <span className="text-xs text-zinc-500 dark:text-zinc-400">No extra details</span> : null}
+                      </div>
                     </div>
-                  </td>
-                  <td className="min-w-0 px-4 py-4 sm:px-5"><ConnectionDetails event={event} /></td>
-                </tr>
+
+                    <div className="min-w-0 border-t border-zinc-100 pt-3 dark:border-zinc-800 xl:border-l xl:border-t-0 xl:border-zinc-100 xl:pl-5 xl:pt-0 dark:xl:border-zinc-800">
+                      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Connection observed</h3>
+                      <ConnectionDetails event={event} />
+                    </div>
+                  </article>
+                </li>
               );
-            }) : (
-              <tr>
-                <td colSpan={5} className="px-5 py-12 text-center">
-                  <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">No matching activity</h3>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Try a different search or clear your search text.</p>
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="mt-3 min-h-9 rounded-lg px-3 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 dark:text-emerald-300 dark:hover:bg-emerald-950/35"
-                  >
-                    Clear search
-                  </button>
-                </td>
-              </tr>
-            )}
-              </tbody>
-            </table>
-          </div>
+            })}
+            </ol>
+          ) : (
+            <div className="px-5 py-12 text-center">
+              <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">No matching activity</h3>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Try a different search or clear your search text.</p>
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="mt-3 min-h-9 rounded-lg px-3 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 dark:text-emerald-300 dark:hover:bg-emerald-950/35"
+              >
+                Clear search
+              </button>
+            </div>
+          )
         ) : (
           <div className="px-5 py-10 text-center">
             <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" aria-hidden="true">

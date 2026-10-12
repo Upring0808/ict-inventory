@@ -4,10 +4,9 @@ import Image from 'next/image';
 import { useEffect, useState, type FormEvent } from 'react';
 import { AppBrand } from '@/components/branding/AppBrand';
 import { LocationPermission } from '@/components/auth/LocationPermission';
-import { withDeadline } from '@/lib/auth/client';
+import { fetchWithTimeout } from '@/lib/auth/client';
 import { LOCATION_MAX_AGE_MS, type BrowserLocation } from '@/lib/security/browserLocation';
 import { requestBrowserLocation } from '@/lib/security/browserLocation.client';
-import { createBrowserClient } from '@/lib/supabase/client';
 import styles from './LoginScreen.module.css';
 
 export interface LoginCredentials {
@@ -108,13 +107,12 @@ export function LoginScreen({
     const email = String(formData.get('forgotEmail') ?? '').trim().toLowerCase();
 
     try {
-      const { error: resetError } = await withDeadline(
-        createBrowserClient().auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/reset-password`,
-        }),
-        12_000
-      );
-      if (resetError) throw resetError;
+      const response = await fetchWithTimeout('/api/auth/request-password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      }, 12_000);
+      if (!response.ok) throw new Error('Password recovery is temporarily unavailable.');
       setForgotNotice('If an account is registered with this email, password reset instructions will be sent.');
     } catch {
       setForgotError('Could not start password reset. Please try again.');

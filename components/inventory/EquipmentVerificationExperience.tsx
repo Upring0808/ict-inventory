@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AppBrand } from '@/components/branding/AppBrand';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { CameraIcon } from '@/components/icons/CameraIcon';
-import { findPublicEquipment, recordPublicQrVerification } from '@/lib/publicEquipmentClient';
+import { findAuthorizedEquipment, findPublicEquipment, recordPublicQrVerification, type PublicEquipment } from '@/lib/publicEquipmentClient';
 import type { InventoryItem } from '@/types/inventory';
 import { EquipmentVerificationActionPanel } from './EquipmentVerificationActionPanel';
 import { EquipmentVerificationRecordDetails } from './EquipmentVerificationRecordDetails';
@@ -18,6 +18,7 @@ interface EquipmentVerificationExperienceProps {
 export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVerificationExperienceProps) {
   const { profile, status: authStatus } = useAuth();
   const [item, setItem] = useState<InventoryItem | null>(null);
+  const [publicEquipment, setPublicEquipment] = useState<PublicEquipment | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -28,11 +29,13 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const scannerRedirectTimer = useRef<number | null>(null);
+  const isAuthorized = authStatus === 'authenticated' && Boolean(profile);
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
+      if (authStatus === 'loading') return;
       setIsLoading(true);
       setLoadError(null);
       setSuccessMessage(null);
@@ -41,15 +44,27 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
       setResolveActiveRemark(false);
 
       try {
-        const found = propertyNumber ? await findPublicEquipment(propertyNumber) : null;
-        if (active) setItem(found);
+        if (isAuthorized) {
+          const found = propertyNumber ? await findAuthorizedEquipment(propertyNumber) : null;
+          if (active) {
+            setItem(found);
+            setPublicEquipment(null);
+          }
+        } else {
+          const found = propertyNumber ? await findPublicEquipment(propertyNumber) : null;
+          if (active) {
+            setItem(null);
+            setPublicEquipment(found);
+          }
+        }
       } catch (error) {
         if (active) {
           setItem(null);
+          setPublicEquipment(null);
           setLoadError(
             error instanceof Error
               ? error.message
-              : 'Equipment details are temporarily unavailable.'
+              : 'Equipment verification is temporarily unavailable.'
           );
         }
       } finally {
@@ -61,7 +76,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
     return () => {
       active = false;
     };
-  }, [propertyNumber, loadAttempt]);
+  }, [propertyNumber, loadAttempt, authStatus, isAuthorized]);
 
   useEffect(() => () => {
     if (scannerRedirectTimer.current !== null) {
@@ -79,7 +94,6 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
     try {
       const updated = await recordPublicQrVerification(
         item,
-        { id: profile.id, email: profile.email, name: profile.name },
         verificationComment,
         resolveActiveRemark
       );
@@ -129,7 +143,9 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
             Equipment verification
           </h1>
           <p className="mt-1.5 max-w-2xl text-sm leading-5 text-slate-700 dark:text-slate-300">
-            Compare this record with the physical equipment, then save a check-in.
+            {isAuthorized
+              ? 'Compare this record with the physical equipment, then save a check-in.'
+              : 'Check whether this QR label is registered. Authorized staff can sign in to see the full record.'}
           </p>
         </header>
 
@@ -156,7 +172,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
               <div className="skeleton h-24 rounded-lg" />
             </section>
           </div>
-        ) : !item ? (
+        ) : !item && !publicEquipment ? (
           <section
             className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30 sm:p-5"
             role={loadError ? 'alert' : 'status'}
@@ -178,7 +194,15 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
               </button>
             )}
           </section>
-        ) : (
+        ) : publicEquipment ? (
+          <section className="rounded-xl border border-emerald-300 bg-white p-5 dark:border-emerald-800 dark:bg-slate-900" aria-label="Public equipment verification">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Registered QR label</p>
+            <h2 className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">This equipment label is registered</h2>
+            <p className="mt-3 break-all font-mono text-sm text-slate-700 dark:text-slate-300">{publicEquipment.propertyNumber}</p>
+            <p className="mt-4 text-sm leading-6 text-slate-700 dark:text-slate-300">Sign in with an authorized inventory account to view the full record and record a check-in.</p>
+            <Link href="/" className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-[#123640] px-4 text-sm font-semibold text-white">Sign in</Link>
+          </section>
+        ) : item ? (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)] lg:items-start lg:gap-5">
             <EquipmentVerificationSummary item={item} canEdit={Boolean(profile)} />
             <EquipmentVerificationRecordDetails
@@ -205,7 +229,7 @@ export function EquipmentVerificationExperience({ propertyNumber }: EquipmentVer
               className="lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:sticky lg:top-4 lg:self-start"
             />
           </div>
-        )}
+        ) : null}
       </div>
     </main>
   );

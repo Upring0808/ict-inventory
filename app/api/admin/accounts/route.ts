@@ -1,13 +1,17 @@
 import {
   createAdminClient,
   createOrUpdateAuthUser,
+  changeCredentialsWithCurrentPassword,
   deleteAuthUser,
   getAuthorizedActor,
   normalizeEmail,
   normalizeUsername,
   validEmail,
   validPassword,
+  verifyCurrentPassword,
 } from '@/lib/auth/server';
+import { readJsonObject } from '@/lib/security/input';
+import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +38,7 @@ function unauthorized() {
 }
 
 function validAccountInput(name: string, email: string, username: string | null) {
-  return name.length >= 2 && name.length <= 100 && validEmail(email) &&
+  return name.length >= 2 && name.length <= 100 && email.length <= 254 && validEmail(email) &&
     (!username || USERNAME_PATTERN.test(username));
 }
 
@@ -59,7 +63,7 @@ export async function GET(request: Request) {
         .is('ended_at', null)
         .gte('last_seen_at', activeSince),
       Promise.all(accountIds.map((id) => admin.from('account_sessions')
-        .select('last_seen_at,ip_address,city,region,country,latitude,longitude,accuracy_meters,location_captured_at,device_model,device_description')
+        .select('last_seen_at,ip_address,city,region,country,latitude,longitude,accuracy_meters,location_captured_at,device_description')
         .eq('account_id', id)
         .order('last_seen_at', { ascending: false })
         .limit(1)
@@ -93,7 +97,6 @@ export async function GET(request: Request) {
             longitude: latestById.get(account.id)?.longitude ?? null,
             accuracyMeters: latestById.get(account.id)?.accuracy_meters ?? null,
             locationCapturedAt: latestById.get(account.id)?.location_captured_at ?? null,
-            deviceModel: latestById.get(account.id)?.device_model ?? null,
             deviceDescription: latestById.get(account.id)?.device_description ?? null,
           } : null,
         })),
@@ -112,12 +115,8 @@ export async function POST(request: Request) {
     const actor = await getAuthorizedActor(request);
     if (!actor) return unauthorized();
 
-    const payload = await request.json() as {
-      name?: unknown;
-      email?: unknown;
-      username?: unknown;
-      password?: unknown;
-    };
+    const payload = await readJsonObject(request);
+    if (!payload) return Response.json({ error: 'Invalid account creation request.' }, { status: 400 });
     const name = typeof payload.name === 'string' ? payload.name.trim() : '';
     const email = typeof payload.email === 'string' ? normalizeEmail(payload.email) : '';
     const username = normalizeUsername(typeof payload.username === 'string' ? payload.username : null);
@@ -191,20 +190,16 @@ export async function PATCH(request: Request) {
     const actor = await getAuthorizedActor(request);
     if (!actor) return unauthorized();
 
-    const payload = await request.json() as {
-      id?: unknown;
-      name?: unknown;
-      email?: unknown;
-      username?: unknown;
-      password?: unknown;
-    };
+    const payload = await readJsonObject(request);
+    if (!payload) return Response.json({ error: 'Invalid account update request.' }, { status: 400 });
     const id = typeof payload.id === 'string' ? payload.id : '';
     const name = typeof payload.name === 'string' ? payload.name.trim() : '';
     const requestedEmail = typeof payload.email === 'string' ? normalizeEmail(payload.email) : null;
     const username = normalizeUsername(typeof payload.username === 'string' ? payload.username : null);
     const password = typeof payload.password === 'string' ? payload.password : '';
+    const currentPassword = typeof payload.currentPassword === 'string' ? payload.currentPassword : '';
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ||
-      name.length < 2 || name.length > 100 || (requestedEmail !== null && !validEmail(requestedEmail)) ||
+      name.length < 2 || name.length > 100 || (requestedEmail !== null && (requestedEmail.length > 254 || !validEmail(requestedEmail))) ||
       (username && !USERNAME_PATTERN.test(username)) ||
       (password && !validPassword(password))) {
       return Response.json({ error: 'Enter a valid name, email, and username. A new password must be at least 12 characters.' }, { status: 400 });
@@ -223,6 +218,14 @@ export async function PATCH(request: Request) {
     if (!account) return Response.json({ error: 'Authorized account not found.' }, { status: 404 });
     const email = requestedEmail ?? normalizeEmail(account.email);
     const emailChanged = email !== normalizeEmail(account.email);
+
+    if (emailChanged || password) {
+      const limit = await checkRateLimit(request, 'credential-change', 20, 900, actor.id, 5);
+      if (!limit.allowed) return rateLimitResponse(limit);
+      if (account.auth_user_id !== actor.id || !await verifyCurrentPassword(account.email, actor.id, currentPassword)) {
+        return Response.json({ error: 'Enter your current password to change your email or password.' }, { status: 403 });
+      }
+    }
 
     if (emailChanged) {
       const { data: authorizedAccounts, error: emailCheckError } = await admin
@@ -251,51 +254,24 @@ export async function PATCH(request: Request) {
       return Response.json({ error: 'This account has no active sign-in identity. Recreate it before changing its email or password.' }, { status: 409 });
     }
 
-    if (emailChanged) {
-      const { error } = await admin.auth.admin.updateUserById(account.auth_user_id!, {
-        email,
-        email_confirm: true,
-      });
-      if (error) {
-        const emailConflict = /already|registered|exists|taken/i.test(error.message);
-        return Response.json(
-          { error: emailConflict ? 'That email is already in use by an authentication account.' : 'The sign-in email could not be updated.' },
-          { status: emailConflict ? 409 : 400 }
-        );
-      }
-    }
-
-    const saveAccount = (passwordUpdated: boolean) => manageAccount(admin, {
+    const saveAccount = () => manageAccount(admin, {
       p_operation: 'update',
       p_id: id,
-      p_email: email,
+      // Supabase changes the Auth email only after its confirmation flow.
+      // The auth.users trigger synchronizes this allowlist when confirmed.
+      p_email: account.email,
       p_username: username,
       p_full_name: name,
       p_auth_user_id: account.auth_user_id,
       p_actor_user_id: actor.id,
       p_actor_email: actor.email,
       p_actor_name: actor.name,
-      p_password_updated: passwordUpdated,
+      p_password_updated: false,
       p_session_id: actor.sessionId,
     });
-    const restoreSignInEmail = async () => {
-      if (!emailChanged || !account.auth_user_id) return true;
-      const { error: rollbackError } = await admin.auth.admin.updateUserById(account.auth_user_id, {
-        email: normalizeEmail(account.email),
-        email_confirm: true,
-      });
-      if (rollbackError) console.error('Could not restore the sign-in email after an account update failed:', rollbackError);
-      return !rollbackError;
-    };
 
-    const { error } = await saveAccount(false);
+    const { error } = await saveAccount();
     if (error) {
-      if (!await restoreSignInEmail()) {
-        return Response.json(
-          { error: 'The account details could not be saved. The sign-in email may have changed; use the new email if needed.' },
-          { status: 503 }
-        );
-      }
       const conflict = error.code === '23505';
       return Response.json(
         { error: conflict ? 'That email or username is already in use.' : 'The authorized account could not be updated.' },
@@ -303,46 +279,71 @@ export async function PATCH(request: Request) {
       );
     }
 
+    const clearPendingEmail = async () => {
+      if (!emailChanged) return;
+      await admin.from('pending_account_email_changes')
+        .delete()
+        .eq('auth_user_id', actor.id)
+        .eq('new_email', email);
+    };
     if (emailChanged) {
-      const { data: savedAccount, error: verifyError } = await admin
-        .from('authorized_accounts')
-        .select('email')
-        .eq('id', id)
-        .maybeSingle();
-      if (!verifyError && normalizeEmail(savedAccount?.email || '') !== email) {
-        const emailRestored = await restoreSignInEmail();
-        return Response.json(
-          { error: emailRestored
-            ? 'Email changes need the updated Supabase schema. Apply the latest schema, then try again.'
-            : 'Email changes need the updated Supabase schema. The sign-in email may have changed; use the new email if needed.' },
-          { status: 503 }
-        );
+      const { error: approvalError } = await admin.from('pending_account_email_changes').upsert({
+        auth_user_id: actor.id,
+        account_id: id,
+        new_email: email,
+        requested_at: new Date().toISOString(),
+      }, { onConflict: 'auth_user_id' });
+      if (approvalError) {
+        return Response.json({ error: 'Account details were saved, but email confirmation is unavailable until the new database schema is applied.' }, { status: 503 });
       }
     }
 
     let warning: string | undefined;
     let passwordUpdated = false;
-    if (password && account.auth_user_id) {
-      const { error: passwordError } = await admin.auth.admin.updateUserById(account.auth_user_id, { password });
-      if (passwordError) {
-        warning = 'Other account details were saved, but the password could not be updated. Please retry the password change.';
+    let emailChangePending = false;
+    let appliedEmailChange = false;
+    if (emailChanged || password) {
+      let credentialResult: Awaited<ReturnType<typeof changeCredentialsWithCurrentPassword>>;
+      try {
+        credentialResult = await changeCredentialsWithCurrentPassword(account.email, actor.id, currentPassword, {
+          ...(emailChanged ? { email } : {}),
+          ...(password ? { password } : {}),
+        });
+      } catch {
+        await clearPendingEmail();
+        throw new Error('Credential update unavailable.');
+      }
+      if (!credentialResult.verified) {
+        await clearPendingEmail();
+        warning = 'Account details were saved, but your current password could not be verified for the credential change.';
+      } else if (!credentialResult.update.ok) {
+        await clearPendingEmail();
+        warning = credentialResult.update.status === 422
+          ? 'Account details were saved, but the new email or password was not accepted.'
+          : 'Account details were saved, but the credential change could not be started.';
       } else {
-        passwordUpdated = true;
-        const { error: auditError } = await saveAccount(true);
-        if (auditError) {
-          console.error('The password changed but its account activity marker could not be saved:', auditError);
-          warning = 'The password changed, but its activity record could not be saved. Please contact the other authorized user.';
-        }
+        passwordUpdated = Boolean(password);
+        appliedEmailChange = emailChanged && credentialResult.update.email === email;
+        emailChangePending = emailChanged && !appliedEmailChange;
+      }
+    }
+
+    if (appliedEmailChange || passwordUpdated) {
+      const token = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (token) {
+        const { error: signOutError } = await admin.auth.admin.signOut(token, 'global');
+        if (signOutError) warning = 'Credentials changed. Sign out of every device and sign in again.';
       }
     }
 
     return Response.json(
       {
         ok: true,
-        reauthenticate: (emailChanged || passwordUpdated) && account.auth_user_id === actor.id,
-        emailChanged,
+        reauthenticate: appliedEmailChange || passwordUpdated,
+        emailChanged: appliedEmailChange,
+        emailChangePending,
         passwordUpdated,
-        account: { id, name, email, username },
+        account: { id, name, email: appliedEmailChange ? email : account.email, username },
         ...(warning ? { warning } : {}),
       },
       { headers: { 'Cache-Control': 'no-store' } }
@@ -357,7 +358,8 @@ export async function DELETE(request: Request) {
     const actor = await getAuthorizedActor(request);
     if (!actor) return unauthorized();
 
-    const payload = await request.json() as { id?: unknown };
+    const payload = await readJsonObject(request);
+    if (!payload) return Response.json({ error: 'Invalid account removal request.' }, { status: 400 });
     const id = typeof payload.id === 'string' ? payload.id : '';
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
       return Response.json({ error: 'A valid account is required.' }, { status: 400 });
@@ -397,8 +399,8 @@ export async function DELETE(request: Request) {
     }
 
     if (account.auth_user_id) {
-      await deleteAuthUser(account.auth_user_id).catch((error) => {
-        console.error('Removed account left an unused Supabase Auth user:', error);
+      await deleteAuthUser(account.auth_user_id).catch(() => {
+        console.error('Removed account left an unused Supabase Auth user.');
       });
     }
 

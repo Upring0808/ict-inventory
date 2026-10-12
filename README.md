@@ -13,15 +13,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Secure Supabase setup
 
-Authentication, the public QR detail route, account management, and the audit log use Supabase. Local storage is only a read cache; equipment changes must be accepted by Supabase before they are shown as saved.
+Authentication, public QR registration checks, account management, and the audit log use Supabase. Local storage is only a read cache and is cleared when a session ends; equipment changes must be accepted by Supabase before they are shown as saved.
 
 ### 1. Apply the database schema
 
 Run the full [`lib/supabase/schema.sql`](lib/supabase/schema.sql) script in Supabase **SQL Editor**. The same secure schema is available in the app's Cloud Sync Assistant and at `/supabase-schema.sql`.
 
-The script creates the two-account allowlist and activity log, removes previous equipment policies, permits database writes only for allowlisted signed-in users, and sets up the audit triggers. Equipment detail is read publicly through a server endpoint that returns one requested item; the equipment table itself is not readable with the public key.
+The script creates the two-account allowlist and activity log, removes previous equipment policies, permits database writes only for allowlisted signed-in users, and sets up the audit triggers. The public QR endpoint returns only whether a label is registered and its printed property number. Full equipment records are read through the signed-in user's RLS policy.
 
 Run the full script again when updating an existing installation, before deploying code that uses new database fields. It converts legacy text equipment IDs to UUIDs, repairs missing IDs, adds the ownership transfer function and custody history without deleting existing inventory, and updates transfer validation so the reason is optional. It also adds service-role-only session observations and connection snapshots to the activity log. Existing activity rows are not backfilled with IP, device, or browser location information. Apply this schema before deploying the location sign-in flow; new password and Google sign-ins require the session-recording function to accept coordinates.
+
+The current schema also creates an atomic, service-role-only rate limiter, a database-stamped QR check-in function, and an `auth.users` trigger that follows confirmed email/password changes and invalidates older inventory sessions. A confirmed email change must match a server-side request made after the account holder entered the current password. Apply the schema before deploying this application version. Back up the database first and verify the migration in a staging project; the script preserves equipment rows and does not replace production inventory with samples.
 
 Sign-in requires the user to allow browser location access. The site must use HTTPS (or localhost during development). The browser reports coordinates and an accuracy radius; it may derive a coarse position from Wi-Fi or network data, and the reading can be spoofed, so it is an audit observation rather than a geofence or trusted second factor. The login screen explains the request and blocks sign-in when permission is denied or a fresh reading cannot be obtained. While the app is open, visible session checks refresh the browser location about every five minutes. IP remains separate connection metadata; new sessions no longer infer city or country from IP.
 
@@ -29,6 +31,9 @@ Sign-in requires the user to allow browser location access. The site must use HT
 
 - Enable the Email provider and Google provider.
 - Turn **off** Supabase's **Allow new users to sign up** setting. The application creates accounts through its server-side admin API, so public sign-up is not needed.
+- Enable **Secure password change** and **Require current password** in Supabase Auth. Direct calls to Supabase Auth must also require proof of the current password; the application's account-edit route enforces this separately. Enable **Secure email change** so direct Auth email changes require confirmation at both addresses.
+- Enable Supabase Auth's **password changed** and **email address changed** security notification emails. Keep the reauthentication and recovery templates enabled, and configure production SMTP. Self-service email/password changes and recovery use the user's verified Auth token so these flows can send configured notifications. The restricted activity log records confirmed changes, and older inventory sessions are invalidated.
+- Review Supabase Auth's built-in sign-in, recovery, email, and OTP rate limits and consider CAPTCHA or WAF rules for public Auth endpoints. Browser clients can call Supabase Auth directly with the publishable key, outside this application's rate-limited routes.
 - Set the Supabase site URL and add your local and deployed `/auth/callback` and `/auth/reset-password` URLs to the allowed redirect URLs. Supabase Auth only redirects to URLs on this allowlist.
 - Make sure the password recovery email template uses the redirect URL passed by the app (`.RedirectTo`) instead of hardcoding the site URL.
 - Configure custom SMTP in Supabase for reliable password reset email delivery in production; Supabase's built-in email service is rate-limited and intended for testing.
@@ -44,9 +49,11 @@ NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SECRET_KEY=your-server-only-secret-key
 INVENTORY_BOOTSTRAP_SECRET=your-random-secret-of-at-least-32-characters
+INVENTORY_APP_ORIGIN=https://your-deployed-origin.example
+INVENTORY_RATE_LIMIT_SECRET=another-random-secret-of-at-least-32-characters
 ```
 
-`SUPABASE_SECRET_KEY` may instead be named `SUPABASE_SERVICE_ROLE_KEY`. Keep it server-only and never prefix it with `NEXT_PUBLIC_`. `INVENTORY_BOOTSTRAP_SECRET` is used only to create the first account; once the account exists, `/api/setup` is locked.
+`SUPABASE_SECRET_KEY` may instead be named `SUPABASE_SERVICE_ROLE_KEY`. Keep it server-only and never prefix it with `NEXT_PUBLIC_`. `INVENTORY_APP_ORIGIN` must be the exact HTTPS origin used for recovery redirects on Vercel; add its `/auth/reset-password` URL to Supabase's redirect allowlist. Local development defaults to the localhost request origin. The rate limiter uses `INVENTORY_RATE_LIMIT_SECRET` if set, or the server-only Supabase secret as a fallback. Use a dedicated random limit secret in production. Remove `INVENTORY_BOOTSTRAP_SECRET` from Vercel after creating the first account; the route is also locked in the database once an account exists.
 
 Account creation does not require application SMTP settings. Configure SMTP in Supabase only if you want reliable password recovery email delivery.
 
@@ -54,7 +61,7 @@ Account creation does not require application SMTP settings. Configure SMTP in S
 
 Open `/setup` and create the first named account using the bootstrap secret and a password of at least 12 characters. Sign in, open **Settings**, and create the second account. Both accounts have the same permissions, and no public registration route is provided.
 
-Set a password for each account when you create it, then share the email or username and password securely with the account holder. They can change the password in Settings after signing in.
+Set a password for each account when you create it, then share the email or username and password securely with the account holder. Settings asks for the current password before email or password changes. Email changes require confirmation at both addresses when Secure email change is enabled; the authorized account updates after confirmation. Password changes sign out the account afterward.
 
 The login page accepts each account's email or optional username and password. Google sign-in is accepted only when the verified email and Auth identity match an authorized account.
 
@@ -67,11 +74,15 @@ Add the Supabase settings to the hosting environment, including Production and a
 ## Access and accountability
 
 - `/` is the authorized dashboard. Unauthenticated users see the sign-in screen.
-- `/verify?asset=…` and equipment QR codes remain public and read-only. Edit and QR verification controls appear only for an authorized signed-in user.
+- `/verify?asset=…` and equipment QR codes remain public and read-only. Public visitors see only registration and the printed property number. Full details, verification history, edit controls, and check-in are available only to an authorized signed-in user.
 - Equipment mutations are enforced by Supabase RLS. Local cache writes do not count as successful changes.
 - **Activity Log** records the user, action, equipment property number, changed fields, and timestamp. Equipment audit rows are written in the same database transaction as each equipment change. Sign-in, connection change, and explicit sign-out events include browser-reported coordinates and accuracy, the IP observed by the app server, and device details. Equipment and account changes show the latest observation from that same session when it was checked within the preceding three minutes.
 - **Transfer ownership** records the former and new accountable officer and office, optional reason, acting account, server time, and a receipt ID. The equipment detail page shows its handoff history; the Activity Log keeps a separate transaction entry. Ordinary edits cannot change custody without a transfer.
-- **Settings** manages the two authorized account records, including names, optional usernames, and password resets. An account is shown as active after an authenticated app check within the past two minutes; **Last online** is the latest such check or explicit sign-out. Session tracking begins only after this schema and app version are deployed.
+- **Settings** manages the two authorized account records, including names, optional usernames, and password resets. Account credential changes require the current password; recovery resets require a recent Supabase recovery link. An account is shown as active after an authenticated app check within the past two minutes; **Last online** is the latest such check or explicit sign-out. Session tracking begins only after this schema and app version are deployed.
+
+The fictional records in `data/initialInventory.ts` are examples only and are never loaded or synchronized automatically. Existing inventory stays in Supabase and in the authorized user's browser cache until sign-out.
+
+See [SECURITY.md](SECURITY.md) for the rollout checklist, Git history exposure, and verification steps.
 
 On Vercel, the server records the IP from trusted request headers. Other hosts may show IP as unavailable. Browser location depends on device location services and can be imprecise; browsers may also hide a specific device model. Existing activity may still display older IP-based estimates.
 
@@ -84,6 +95,7 @@ When a new service worker is ready, installed and open app sessions show an **Ap
 ## Checks
 
 ```bash
+npm run test:security
 npm run lint
 npm run build
 ```
