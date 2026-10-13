@@ -16,6 +16,7 @@ interface TopHeaderProps {
   filteredItemCount: number;
   isInventoryLoading?: boolean;
   isExporting?: boolean;
+  showInventoryTools?: boolean;
   onRefresh: () => void;
   isRefreshing?: boolean;
 }
@@ -31,6 +32,7 @@ export function TopHeader({
   filteredItemCount,
   isInventoryLoading = false,
   isExporting = false,
+  showInventoryTools = true,
   onRefresh,
   isRefreshing,
 }: TopHeaderProps) {
@@ -130,7 +132,7 @@ export function TopHeader({
         </div>
 
         {/* Center: Search Bar */}
-        <div className="hidden md:flex flex-1 max-w-xl mx-4">
+        {showInventoryTools && <div className="hidden md:flex flex-1 max-w-xl mx-4">
           <div className="relative w-full">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
               <svg className="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -139,6 +141,7 @@ export function TopHeader({
             </div>
             <input
               type="text"
+              aria-label="Search inventory records"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Search property no., model, serial, personnel..."
@@ -146,6 +149,8 @@ export function TopHeader({
             />
             {searchQuery ? (
               <button
+                type="button"
+                aria-label="Clear inventory search"
                 onClick={() => onSearchChange('')}
                 className="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
               >
@@ -155,7 +160,7 @@ export function TopHeader({
               </button>
             ) : null}
           </div>
-        </div>
+        </div>}
 
         {/* Right Action Icons */}
         <div className="flex items-center gap-2">
@@ -171,11 +176,12 @@ export function TopHeader({
             </svg>
           </a>
           {/* Refresh button */}
-          <button
+          {showInventoryTools && <button
+            type="button"
             onClick={() => onRefresh()}
             disabled={isRefreshing}
             className="hidden h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-2xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800 sm:flex"
-            title="Refresh records"
+            title="Refresh inventory records"
           >
             <svg
               className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`}
@@ -190,7 +196,7 @@ export function TopHeader({
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               />
             </svg>
-          </button>
+          </button>}
 
           {/* Theme Toggle Button */}
           <button
@@ -223,7 +229,7 @@ export function TopHeader({
           </button>
 
           {/* Export menu stays available on touch-sized screens. */}
-          <div ref={exportMenuRef} className="relative">
+          {showInventoryTools && <div ref={exportMenuRef} className="relative">
             <button
               ref={exportTriggerRef}
               type="button"
@@ -312,7 +318,7 @@ export function TopHeader({
                 </span>
               </button>
             </div>
-          </div>
+          </div>}
 
           {/* Authenticated account profile */}
           <div ref={profileMenuRef} className="relative border-l border-zinc-200 pl-2 dark:border-zinc-800 sm:pl-3">

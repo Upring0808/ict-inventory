@@ -473,6 +473,7 @@ function InventoryDashboardContent() {
       <div className="flex flex-1 flex-col min-w-0 h-screen overflow-hidden">
         {/* Top Header */}
         <TopHeader
+          key={currentTab === 'activity' ? 'activity' : 'inventory'}
           onOpenMobileMenu={() => setIsMobileOpen(true)}
           title="PENRO BATANES ICT INVENTORY"
           searchQuery={filters.searchQuery}
@@ -483,6 +484,7 @@ function InventoryDashboardContent() {
           filteredItemCount={filteredItems.length}
           isInventoryLoading={isLoading}
           isExporting={isExporting}
+          showInventoryTools={currentTab !== 'activity'}
           onRefresh={() => fetchData()}
           isRefreshing={isRefreshing}
         />

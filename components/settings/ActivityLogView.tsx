@@ -310,12 +310,18 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
         <div>
           <h2 className="text-2xl font-semibold leading-tight tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-[30px]">Activity log</h2>
           <p className="mt-1.5 max-w-[75ch] text-sm leading-5 text-zinc-600 dark:text-zinc-400">See equipment changes and sign-in session checks, including observed connections.</p>
-          <p className="mt-1 max-w-[105ch] text-xs leading-5 text-zinc-500 dark:text-zinc-400">Location is reported by the browser at sign-in and during active session checks, with its estimated accuracy. IP and device details are separate. Older activity may only have approximate IP location.</p>
+          <details className="group mt-2 max-w-[105ch] text-xs text-zinc-600 dark:text-zinc-400">
+            <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-md font-medium text-emerald-800 outline-none hover:underline focus-visible:ring-4 focus-visible:ring-emerald-600/15 dark:text-emerald-300 [&::-webkit-details-marker]:hidden">
+              How location details are recorded
+              <svg aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="none" stroke="currentColor"><path d="m5 7.5 5 5 5-5" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </summary>
+            <p className="mt-1 leading-5">Location is reported by the browser at sign-in and during active session checks, with its estimated accuracy. IP and device details are separate. Older activity may only have approximate IP location.</p>
+          </details>
         </div>
 
-        <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(20rem,1fr)_auto_auto] dark:border-zinc-800 dark:bg-zinc-900/50">
-          <label htmlFor="activity-search" className="block min-w-0 sm:col-span-2 xl:col-span-1">
-            <span className="mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Search loaded activity</span>
+        <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 sm:grid-cols-2 sm:items-end lg:grid-cols-[minmax(20rem,1fr)_auto_auto] dark:border-zinc-800 dark:bg-zinc-900/50">
+          <label htmlFor="activity-search" className="block min-w-0 sm:col-span-2 lg:col-span-1">
+            <span className="mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Search activity</span>
             <span className="relative block">
               <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" viewBox="0 0 20 20" fill="none" stroke="currentColor">
                 <circle cx="8.75" cy="8.75" r="5.75" strokeWidth="1.6" />
@@ -324,12 +330,14 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
               <input
                 id="activity-search"
                 type="search"
+                aria-describedby="activity-search-hint"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Name, IP, device, or change"
                 className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 outline-none transition placeholder:text-zinc-500 hover:border-zinc-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:hover:border-zinc-600"
               />
             </span>
+            <span id="activity-search-hint" className="mt-1.5 block text-xs text-zinc-500 dark:text-zinc-400">Searches the entries loaded below.</span>
           </label>
           <label htmlFor="activity-date" className="block">
             <span className="mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Filter by day</span>
@@ -369,10 +377,10 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
       <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-800 sm:px-5">
           <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{selectedDate ? `Activity for ${selectedDate}` : 'Recent activity'}</p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p aria-live="polite" className="text-xs text-zinc-500 dark:text-zinc-400">
             {isLoading
               ? 'Loading…'
-              : `${normalizedSearch ? `${visibleEvents.length} matching · ` : ''}${events.length} loaded${hasMore ? ' · more available' : ''}${isRefreshing ? ' · Refreshing' : ''}`}
+              : `${normalizedSearch ? `${visibleEvents.length} matching in ` : ''}${events.length} loaded${hasMore ? ' · more available' : ''}${isRefreshing ? ' · Refreshing' : ''}`}
           </p>
         </div>
 
@@ -467,13 +475,11 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
                 <li key={event.id} className="px-4 py-4 transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/25 sm:px-5 sm:py-5">
                   <article className="grid min-w-0 gap-4 xl:grid-cols-[minmax(13rem,0.9fr)_minmax(0,1.6fr)_minmax(15rem,1fr)] xl:gap-6">
                     <div className="min-w-0">
-                      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Activity</h3>
-                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">When</p>
-                      <time dateTime={event.occurred_at} className="flex flex-wrap items-center gap-x-2 text-xs font-medium tabular-nums text-zinc-600 dark:text-zinc-400">
+                      <time dateTime={event.occurred_at} className="flex flex-wrap items-center gap-x-2 text-sm font-semibold tabular-nums text-zinc-800 dark:text-zinc-200">
                         <span>{formattedDate}</span>
                         {formattedTime ? <><span aria-hidden="true" className="text-zinc-400">·</span><span>{formattedTime}</span></> : null}
                       </time>
-                      <p className="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Performed by</p>
+                      <p className="mb-1 mt-4 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Performed by</p>
                       <div className="flex min-w-0 items-center gap-2.5">
                         <ActorAvatar name={actorName} imageUrl={event.actor_avatar_url} key={event.actor_avatar_url || 'no-avatar'} />
                         <div className="min-w-0">
@@ -489,7 +495,7 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
                     </div>
 
                     <div className="min-w-0">
-                      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Action made</h3>
+                      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Action</h3>
                       <div className="grid min-w-0 justify-items-start gap-2">
                         <span className={`inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold leading-4 ${actionTone(event.action)}`}>
                           <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${actionDotTone(event.action)}`} />
@@ -510,7 +516,7 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
                     </div>
 
                     <div className="min-w-0 border-t border-zinc-100 pt-3 dark:border-zinc-800 xl:border-l xl:border-t-0 xl:border-zinc-100 xl:pl-5 xl:pt-0 dark:xl:border-zinc-800">
-                      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Connection observed</h3>
+                      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">Connection</h3>
                       <ConnectionDetails event={event} />
                     </div>
                   </article>
@@ -520,8 +526,8 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
             </ol>
           ) : (
             <div className="px-5 py-12 text-center">
-              <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">No matching activity</h3>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Try a different search or clear your search text.</p>
+              <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">No matches in loaded activity</h3>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Try another term{hasMore ? ' or load older activity to expand the search.' : ' or clear the search.'}</p>
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
