@@ -7,12 +7,28 @@ import { useAuth } from '@/components/auth/AuthProvider';
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
 
-  if (auth.status === 'loading' && auth.hasSession) {
+  if (auth.status === 'loading') {
     return (
-      <main className="grid min-h-screen place-items-center bg-zinc-50 dark:bg-zinc-950">
-        <div className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-sm font-medium text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-blue-600" />
-          Checking authorized access…
+      <main aria-busy="true" className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
+        <span className="sr-only" role="status">Opening inventory…</span>
+        <aside aria-hidden="true" className="hidden w-64 shrink-0 border-r border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 lg:block">
+          <div className="skeleton h-9 w-36" />
+          <div className="mt-10 space-y-5">
+            {[0, 1, 2, 3, 4].map((item) => <div key={item} className="skeleton h-9 w-full" />)}
+          </div>
+        </aside>
+        <div aria-hidden="true" className="min-w-0 flex-1">
+          <div className="flex h-16 items-center justify-between border-b border-zinc-200 bg-white px-5 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="skeleton h-5 w-40" />
+            <div className="skeleton h-8 w-8 rounded-full" />
+          </div>
+          <div className="mx-auto max-w-7xl space-y-6 p-5 sm:p-8">
+            <div className="skeleton h-8 w-52" />
+            <div className="grid gap-4 sm:grid-cols-3">
+              {[0, 1, 2].map((item) => <div key={item} className="skeleton h-28 rounded-2xl" />)}
+            </div>
+            <div className="skeleton h-56 rounded-2xl" />
+          </div>
         </div>
       </main>
     );

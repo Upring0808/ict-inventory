@@ -20,7 +20,6 @@ export type AuthLoadingMethod = 'password' | 'google' | null;
 
 interface AuthContextValue {
   status: AuthStatus;
-  hasSession: boolean;
   profile: AuthProfile | null;
   loadingMethod: AuthLoadingMethod;
   error: string | null;
@@ -68,7 +67,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const profileRef = useRef<AuthProfile | null>(null);
   const statusRef = useRef<AuthStatus>('loading');
   const [status, setStatus] = useState<AuthStatus>('loading');
-  const [hasSession, setHasSession] = useState(false);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [loadingMethod, setLoadingMethod] = useState<AuthLoadingMethod>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +96,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const acceptSession = useCallback((session: Session, nextProfile: AuthProfile) => {
     ++operationRef.current;
     tokenRef.current = session.access_token;
-    setHasSession(true);
     pendingLoginErrorRef.current = null;
     takeLoginError();
     pendingPasswordRef.current = null;
@@ -111,7 +108,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resolveNoSession = useCallback(async (checkSetup: boolean) => {
     const operation = ++operationRef.current;
-    setHasSession(false);
     clearLocalItems();
     // A settled login/setup screen should not disappear when an OAuth tab is
     // closed or this document becomes visible again without a new session.
@@ -152,7 +148,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const verifySession = useCallback(async (session: Session, force = false) => {
     if (googleSignInInProgressRef.current) return;
-    setHasSession(true);
     const pending = pendingPasswordRef.current;
     if (pending?.accessToken === session.access_token && pending.profile.id === session.user.id) {
       acceptSession(session, pending.profile);
@@ -500,7 +495,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     pendingPasswordRef.current = null;
     profileRef.current = null;
     setProfile(null);
-    setHasSession(false);
     changeStatus('unauthenticated');
     try {
       try {
@@ -529,7 +523,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       pendingPasswordRef.current = null;
       profileRef.current = null;
       setProfile(null);
-      setHasSession(false);
       if (statusRef.current !== 'unauthenticated') changeStatus('unauthenticated');
       setLoadingMethod('google');
 
@@ -585,10 +578,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [changeStatus, clearGoogleLoading, resolveNoSession, showUnavailable]);
 
   const value = useMemo<AuthContextValue>(() => ({
-    status, hasSession, profile, loadingMethod, error,
+    status, profile, loadingMethod, error,
     signInWithPassword, signInWithGoogle, signOut, retryAuthorization,
     clearError: () => setError(null),
-  }), [status, hasSession, profile, loadingMethod, error, signInWithPassword, signInWithGoogle, signOut, retryAuthorization]);
+  }), [status, profile, loadingMethod, error, signInWithPassword, signInWithGoogle, signOut, retryAuthorization]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
