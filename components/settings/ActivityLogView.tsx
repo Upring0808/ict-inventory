@@ -319,8 +319,8 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
           </details>
         </div>
 
-        <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 sm:grid-cols-2 sm:items-end lg:grid-cols-[minmax(20rem,1fr)_auto_auto] dark:border-zinc-800 dark:bg-zinc-900/50">
-          <label htmlFor="activity-search" className="block min-w-0 sm:col-span-2 lg:col-span-1">
+        <div className="grid gap-4 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4 lg:grid-cols-[minmax(0,1fr)_20rem] dark:border-zinc-800 dark:bg-zinc-900/50">
+          <label htmlFor="activity-search" className="block min-w-0">
             <span className="mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Search activity</span>
             <span className="relative block">
               <svg aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" viewBox="0 0 20 20" fill="none" stroke="currentColor">
@@ -334,39 +334,42 @@ export function ActivityLogView({ isActive = true }: { isActive?: boolean }) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Name, IP, device, or change"
-                className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 outline-none transition placeholder:text-zinc-500 hover:border-zinc-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:hover:border-zinc-600"
+                className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 outline-none transition placeholder:text-zinc-500 hover:border-zinc-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-400 dark:hover:border-zinc-600"
               />
             </span>
             <span id="activity-search-hint" className="mt-1.5 block text-xs text-zinc-500 dark:text-zinc-400">Searches the entries loaded below.</span>
           </label>
-          <label htmlFor="activity-date" className="block">
-            <span className="mb-1.5 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">Filter by day</span>
-            <input
-              id="activity-date"
-              type="date"
-              value={selectedDate}
-              onChange={(event) => setSelectedDate(event.target.value)}
-              className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-800 outline-none transition hover:border-zinc-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 sm:w-auto dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-600"
-            />
-          </label>
-          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
-            {selectedDate || searchQuery ? (
+          <div className="min-w-0">
+            <div className="mb-1.5 flex min-h-5 items-center justify-between gap-2">
+              <label htmlFor="activity-date" className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Filter by day</label>
+              {selectedDate || searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => { setSelectedDate(''); setSearchQuery(''); }}
+                  className="rounded-md px-1 text-xs font-semibold text-emerald-800 underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 dark:text-emerald-300"
+                >
+                  Clear filters
+                </button>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                id="activity-date"
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                className="min-h-11 min-w-[10rem] flex-1 rounded-xl border border-zinc-200 bg-white px-3.5 text-sm font-medium text-zinc-800 outline-none transition hover:border-zinc-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-zinc-600"
+              />
               <button
                 type="button"
-                onClick={() => { setSelectedDate(''); setSearchQuery(''); }}
-                className="min-h-11 rounded-lg px-3 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-200/70 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                onClick={() => void loadEvents(true)}
+                disabled={isLoading || isRefreshing}
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3.5 text-sm font-semibold text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
               >
-                Clear filters
+                <svg aria-hidden="true" className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 11a8 8 0 1 0-2.4 6.2M20 4v7h-7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                {isRefreshing ? 'Refreshing…' : 'Refresh'}
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void loadEvents(true)}
-              disabled={isLoading || isRefreshing}
-              className="min-h-11 rounded-lg border border-zinc-200 bg-white px-3.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/15 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              {isRefreshing ? 'Refreshing…' : 'Refresh'}
-            </button>
+            </div>
           </div>
         </div>
       </header>
