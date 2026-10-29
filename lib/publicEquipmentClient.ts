@@ -56,10 +56,26 @@ export async function findPublicEquipment(propertyNumber: string): Promise<Publi
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('Equipment verification is temporarily unavailable.');
   const result = await response.json() as Record<string, unknown>;
-  if (result.registered !== true || result.propertyNumber !== normalized) {
+  if (
+    result.registered !== true ||
+    result.propertyNumber !== normalized ||
+    typeof result.equipmentType !== 'string' ||
+    typeof result.brand !== 'string' ||
+    typeof result.model !== 'string' ||
+    typeof result.statusCategory !== 'string' ||
+    (result.yearAcquired !== undefined && typeof result.yearAcquired !== 'string')
+  ) {
     throw new Error('Equipment verification returned an invalid response.');
   }
-  return { propertyNumber: normalized, registered: true };
+  return {
+    propertyNumber: normalized,
+    registered: true,
+    equipmentType: result.equipmentType,
+    brand: result.brand,
+    model: result.model,
+    statusCategory: result.statusCategory as InventoryItem['statusCategory'],
+    yearAcquired: result.yearAcquired as string | undefined,
+  };
 }
 
 /** Full records are read with the user's session and the equipment RLS policy. */

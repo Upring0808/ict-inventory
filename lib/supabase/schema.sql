@@ -926,7 +926,7 @@ create trigger set_equipment_updated_at
 
 -- Remove older permissive policies and grant account access only to the two
 -- records that exist in authorized_accounts. The public QR route returns only
--- the approved property-number summary; the table itself is not public.
+-- the approved equipment summary; the table itself is not public.
 do $$
 declare
   v_policy record;

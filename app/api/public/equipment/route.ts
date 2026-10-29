@@ -5,7 +5,7 @@ import { checkRateLimit, rateLimitResponse } from '@/lib/security/rateLimit';
 export const dynamic = 'force-dynamic';
 const responseHeaders = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 
-/** The property number is printed in the QR label. No other column is public. */
+/** Return only the approved read-only fields for a scanned QR label. */
 export async function GET(request: Request) {
   const limit = await checkRateLimit(request, 'public-equipment', 60, 60);
   if (!limit.allowed) return rateLimitResponse(limit);
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await createAdminClient()
       .from('equipment')
-      .select('property_number')
+      .select('property_number,equipment_type,brand,model,status_category,year_acquired')
       .eq('property_number', propertyNumber)
       .maybeSingle();
 

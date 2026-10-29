@@ -29,15 +29,30 @@ const input = loadPureTypescript('lib/security/input.ts');
 const qr = loadPureTypescript('lib/qrEquipment.ts');
 const tokenClaims = loadPureTypescript('lib/security/tokenClaims.ts');
 
-test('public QR projection excludes confidential equipment fields', () => {
+test('public QR projection includes equipment details without confidential fields', () => {
   const row = {
     property_number: 'EXAMPLE-QR-001',
+    equipment_type: 'Laptop Computers',
+    brand: 'Example Brand',
+    model: 'Example Model',
+    status_category: 'Serviceable',
+    year_acquired: 2023,
     serial_number: 'SECRET-SERIAL',
     accountable_personnel: 'Private Person',
+    location: 'Private Office',
+    remarks: 'Private maintenance note',
     verification_history: [{ verifiedBy: 'Private Person' }],
   };
   const summary = publicEquipment.publicEquipmentSummary(row);
-  assert.equal(JSON.stringify(summary), JSON.stringify({ propertyNumber: 'EXAMPLE-QR-001', registered: true }));
+  assert.equal(JSON.stringify(summary), JSON.stringify({
+    propertyNumber: 'EXAMPLE-QR-001',
+    registered: true,
+    equipmentType: 'Laptop Computers',
+    brand: 'Example Brand',
+    model: 'Example Model',
+    statusCategory: 'Serviceable',
+    yearAcquired: '2023',
+  }));
   assert.equal(publicEquipment.validPublicPropertyNumber('EXAMPLE-QR-001'), true);
   assert.equal(publicEquipment.validPublicPropertyNumber('EXAMPLE\nQR'), false);
   assert.equal(publicEquipment.validPublicPropertyNumber('A'.repeat(161)), false);

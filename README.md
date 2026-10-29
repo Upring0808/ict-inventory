@@ -19,7 +19,7 @@ Authentication, public QR registration checks, account management, and the audit
 
 Run the full [`lib/supabase/schema.sql`](lib/supabase/schema.sql) script in Supabase **SQL Editor**. The same secure schema is available in the app's Cloud Sync Assistant and at `/supabase-schema.sql`.
 
-The script creates the two-account allowlist and activity log, removes previous equipment policies, permits database writes only for allowlisted signed-in users, and sets up the audit triggers. The public QR endpoint returns only whether a label is registered and its printed property number. Full equipment records are read through the signed-in user's RLS policy.
+The script creates the two-account allowlist and activity log, removes previous equipment policies, permits database writes only for allowlisted signed-in users, and sets up the audit triggers. The public QR endpoint returns the printed property number, equipment type, brand, model, condition, and acquisition year. Full equipment records are read through the signed-in user's RLS policy.
 
 Run the full script again when updating an existing installation, before deploying code that uses new database fields. It converts legacy text equipment IDs to UUIDs, repairs missing IDs, adds the ownership transfer function and custody history without deleting existing inventory, and updates transfer validation so the reason is optional. It also adds service-role-only session observations and connection snapshots to the activity log. Existing activity rows are not backfilled with IP, device, or browser location information. Apply this schema before deploying the location sign-in flow; new password and Google sign-ins require the session-recording function to accept coordinates.
 
@@ -74,7 +74,7 @@ Add the Supabase settings to the hosting environment, including Production and a
 ## Access and accountability
 
 - `/` is the authorized dashboard. Unauthenticated users see the sign-in screen.
-- `/verify?asset=…` and equipment QR codes remain public and read-only. Public visitors see only registration and the printed property number. Full details, verification history, edit controls, and check-in are available only to an authorized signed-in user.
+- `/verify?asset=…` and equipment QR codes remain public and read-only for visitors. They can see the property number, equipment type, brand, model, condition, and acquisition year without a login prompt. Custody details, serial numbers, maintenance remarks, verification history, edit controls, and check-in are available only to an authorized signed-in user.
 - Equipment mutations are enforced by Supabase RLS. Local cache writes do not count as successful changes.
 - **Activity Log** records the user, action, equipment property number, changed fields, and timestamp. Equipment audit rows are written in the same database transaction as each equipment change. Sign-in, connection change, and explicit sign-out events include browser-reported coordinates and accuracy, the IP observed by the app server, and device details. Equipment and account changes show the latest observation from that same session when it was checked within the preceding three minutes.
 - **Transfer ownership** records the former and new accountable officer and office, optional reason, acting account, server time, and a receipt ID. The equipment detail page shows its handoff history; the Activity Log keeps a separate transaction entry. Ordinary edits cannot change custody without a transfer.

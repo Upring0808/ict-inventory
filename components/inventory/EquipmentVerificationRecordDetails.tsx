@@ -23,10 +23,10 @@ export function EquipmentVerificationRecordDetails({
   return (
     <section
       aria-label="Full equipment record and verification history"
-      className={'min-w-0 overflow-hidden rounded-xl border border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900 ' + className}
+      className={'min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 ' + className}
     >
       <details className="group">
-        <summary className="flex min-h-16 cursor-pointer items-center justify-between gap-3 bg-slate-100 px-4 py-3 text-left transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-700 dark:bg-slate-800 dark:hover:bg-slate-700 sm:px-5">
+        <summary className="flex min-h-16 cursor-pointer items-center justify-between gap-3 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-700 dark:bg-slate-900 dark:hover:bg-slate-800 sm:px-5">
           <span className="min-w-0">
             <span className="block text-sm font-semibold text-slate-950 dark:text-slate-100">
               Full equipment record
@@ -35,15 +35,12 @@ export function EquipmentVerificationRecordDetails({
               Specifications, acquisition, and assignment
             </span>
           </span>
-          <span className="shrink-0 text-xs font-semibold text-slate-700 dark:text-slate-300 group-open:hidden">
-            View details
-          </span>
-          <span className="hidden shrink-0 text-xs font-semibold text-slate-700 group-open:inline dark:text-slate-300">
-            Hide details
-          </span>
+          <svg aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none dark:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
         </summary>
 
-        <div className="space-y-5 border-t border-slate-300 px-4 py-4 dark:border-slate-700 sm:px-5">
+        <div className="space-y-5 border-t border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-5">
           <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
             <EquipmentVerificationField label="Year acquired" value={item.yearAcquired} />
             <EquipmentVerificationField label="Shelf life" value={item.shelfLife} />
@@ -54,7 +51,7 @@ export function EquipmentVerificationRecordDetails({
           </dl>
 
           {isComputer && (
-            <section className="border-t border-slate-300 pt-4 dark:border-slate-700">
+            <section className="border-t border-slate-200 pt-4 dark:border-slate-800">
               <h3 className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">
                 Hardware and software
               </h3>
@@ -73,17 +70,20 @@ export function EquipmentVerificationRecordDetails({
         </div>
       </details>
 
-      <details className="group border-t border-slate-300 dark:border-slate-700">
-        <summary className="flex min-h-16 cursor-pointer items-center justify-between gap-3 bg-slate-100 px-4 py-3 text-left transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-700 dark:bg-slate-800 dark:hover:bg-slate-700 sm:px-5">
+      <details className="group border-t border-slate-200 dark:border-slate-800">
+        <summary className="flex min-h-16 cursor-pointer items-center justify-between gap-3 bg-white px-4 py-3 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-700 dark:bg-slate-900 dark:hover:bg-slate-800 sm:px-5">
           <span className="text-sm font-semibold text-slate-950 dark:text-slate-100">
             Verification history
           </span>
-          <span className="shrink-0 text-xs font-medium text-slate-600 dark:text-slate-400">
+          <span className="flex shrink-0 items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400">
             {verificationCount} {verificationCount === 1 ? 'check-in' : 'check-ins'}
+            <svg aria-hidden="true" className="h-5 w-5 text-slate-500 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none dark:text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
           </span>
         </summary>
 
-        <div className="border-t border-slate-300 px-4 py-4 dark:border-slate-700 sm:px-5">
+        <div className="border-t border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-5">
           {history.length === 0 ? (
             <p className="text-sm leading-5 text-slate-600 dark:text-slate-400">
               No check-ins have been recorded for this equipment yet.
