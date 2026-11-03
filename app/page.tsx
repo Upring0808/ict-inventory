@@ -143,6 +143,7 @@ function InventoryDashboardContent() {
       const item = items.find((candidate) => candidate.propertyNumber.toLowerCase() === propertyNumber.toLowerCase());
       if (item) {
         setCurrentTab('all');
+        setFilters((previous) => ({ ...previous, searchQuery: '' }));
         setItemToEdit(item);
         setIsModalOpen(true);
       }
@@ -219,23 +220,22 @@ function InventoryDashboardContent() {
   const handleSelectTab = (tab: SidebarTab) => {
     setDetailItem(null);
     setCurrentTab(tab);
-    if (tab === 'overview') {
-      // Keep state intact
-    } else if (tab === 'all') {
-      setFilters((prev) => ({ ...prev, type: '', statusCategory: '', year: '' }));
-    } else if (tab === 'desktops') {
-      setFilters((prev) => ({ ...prev, type: 'Desktop Computers', statusCategory: '', year: '' }));
-    } else if (tab === 'laptops') {
-      setFilters((prev) => ({ ...prev, type: 'Laptop Computers', statusCategory: '', year: '' }));
-    } else if (tab === 'printers') {
-      setFilters((prev) => ({ ...prev, type: 'Printers', statusCategory: '', year: '' }));
-    } else if (tab === 'scanners') {
-      setFilters((prev) => ({ ...prev, type: 'Scanners', statusCategory: '', year: '' }));
-    } else if (tab === 'issues') {
-      setFilters((prev) => ({ ...prev, type: '', statusCategory: 'Needs Attention', year: '' }));
-    } else if (tab === 'verified' || tab === 'unverified') {
-      setFilters((prev) => ({ ...prev, type: '', statusCategory: '', year: '' }));
-    }
+    setFilters((previous) => {
+      const clearedSearch = { ...previous, searchQuery: '' };
+      if (tab === 'overview' || tab === 'activity' || tab === 'settings') return clearedSearch;
+      if (tab === 'all' || tab === 'verified' || tab === 'unverified') {
+        return { ...clearedSearch, type: '', statusCategory: '', year: '' };
+      }
+      if (tab === 'issues') {
+        return { ...clearedSearch, type: '', statusCategory: 'Needs Attention', year: '' };
+      }
+
+      const tabType =
+        tab === 'desktops' ? 'Desktop Computers' :
+        tab === 'laptops' ? 'Laptop Computers' :
+        tab === 'printers' ? 'Printers' : 'Scanners';
+      return { ...clearedSearch, type: tabType, statusCategory: '', year: '' };
+    });
   };
 
   // Filtered items
@@ -363,6 +363,7 @@ function InventoryDashboardContent() {
       setViewMode('table');
       setFilters((previous) => ({
         ...previous,
+        searchQuery: '',
         type: '',
         location: '',
         brand: '',

@@ -114,8 +114,7 @@ export function OverviewView({
   const total = summary.total || 1;
   const agingPct = Math.round((summary.beyond5YearsCount / total) * 100);
   const withinPct = 100 - agingPct;
-
-  const maxLocationCount = locationStats.reduce((max, l) => Math.max(max, l.count), 0) || 1;
+  const maxLocationCount = locationStats[0]?.count ?? 1;
 
   const typeCards = [
     {
@@ -302,7 +301,7 @@ export function OverviewView({
       </div>
 
       {/* Donut Chart + Office Distribution — 2 col grid */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-2">
 
         {/* Animated Donut Chart — Equipment Age */}
         <div
@@ -354,44 +353,62 @@ export function OverviewView({
 
         {/* Office Distribution */}
         <div
-          className="card-entrance rounded-2xl border border-zinc-200/80 bg-white p-5 shadow-xs dark:border-zinc-800/80 dark:bg-zinc-900"
+          className="card-entrance flex h-full min-w-0 flex-col rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
           style={{ animationDelay: '280ms' }}
         >
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Office Distribution</h3>
-              <p className="text-[11px] text-zinc-400 mt-0.5">{locationStats.length} offices &amp; divisions</p>
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Office Distribution</h3>
+            <p className="mt-0.5 text-[11px] text-zinc-600 dark:text-zinc-400">Largest offices first · bars compare unit counts</p>
+          </div>
+          {locationStats.length === 0 ? (
+            <div className="flex min-h-40 flex-1 items-center justify-center rounded-lg border border-dashed border-zinc-300 px-5 text-center text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+              No office distribution is available yet.
             </div>
-          </div>
-          <div className="space-y-2.5">
-            {locationStats.map((loc, i) => (
-              <div
-                key={loc.location}
-                className="row-animate"
-                style={{ animationDelay: `${300 + i * 40}ms` }}
-              >
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[60%]" title={loc.location}>
-                    {loc.location}
-                  </span>
-                  <span className="font-bold text-zinc-900 dark:text-zinc-100 ml-2 tabular-nums">
-                    {loc.count}
-                    <span className="font-normal text-zinc-400 ml-1">({loc.percentage}%)</span>
-                  </span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+          ) : (
+            <ol aria-label="Equipment distribution by office" className="space-y-1.5">
+              {locationStats.map((loc, i) => (
+                <li
+                  key={loc.location}
+                  className="row-animate min-w-0"
+                  style={{ animationDelay: `${300 + i * 40}ms` }}
+                >
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span aria-hidden="true" className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[9px] font-bold tabular-nums ${i === 0 ? 'bg-emerald-700 text-white dark:bg-emerald-500 dark:text-emerald-950' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'}`}>
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <span className="truncate text-xs font-medium text-zinc-800 dark:text-zinc-200" title={loc.location}>
+                        {loc.location}
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                        {loc.count}<span className="ml-1 text-[10px] font-normal text-zinc-600 dark:text-zinc-400">units</span>
+                      </span>
+                      <span className="min-w-9 text-right text-[10px] font-semibold tabular-nums text-emerald-900 dark:text-emerald-200">
+                        {loc.percentage}%
+                      </span>
+                    </div>
+                  </div>
                   <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{
-                      width: `${(loc.count / maxLocationCount) * 100}%`,
-                      backgroundColor: '#15803d',
-                      transitionDelay: `${300 + i * 40}ms`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+                    role="meter"
+                    aria-label={`${loc.location}: ${loc.count} units, ${loc.percentage}% of all assets`}
+                    aria-valuemin={0}
+                    aria-valuemax={maxLocationCount}
+                    aria-valuenow={loc.count}
+                    aria-valuetext={`${loc.count} units (${loc.percentage}% of all assets)`}
+                    className="ml-[30px] mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800"
+                  >
+                    <div
+                      aria-hidden="true"
+                      className={`h-full rounded-full transition-[width] duration-500 ${i === 0 ? 'bg-emerald-700 dark:bg-emerald-500' : 'bg-emerald-500 dark:bg-emerald-600'}`}
+                      style={{ width: `${(loc.count / maxLocationCount) * 100}%`, transitionDelay: `${300 + i * 40}ms` }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       </div>
     </div>

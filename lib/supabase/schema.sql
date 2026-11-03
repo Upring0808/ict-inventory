@@ -479,7 +479,6 @@ as $$
 declare
   v_previous public.account_sessions%rowtype;
   v_exists boolean;
-  v_action text;
   v_now timestamptz := timezone('utc'::text, now());
   v_latitude double precision;
   v_longitude double precision;
@@ -532,23 +531,9 @@ begin
       p_device_description, null, v_latitude, v_longitude,
       v_accuracy_meters, v_location_captured_at
     );
-    v_action := case
-      when p_event = 'ended' then 'auth.signed_out'
-      when p_event = 'signed_in' then 'auth.signed_in'
-      else 'auth.session_observed'
-    end;
   elsif v_previous.ended_at is not null then
     return;
   else
-    if p_event = 'ended' then
-      v_action := 'auth.signed_out';
-    elsif v_previous.ip_address is distinct from p_ip_address
-      or v_previous.city is distinct from p_city
-      or v_previous.region is distinct from p_region
-      or v_previous.country is distinct from p_country
-      or v_previous.device_description is distinct from p_device_description then
-      v_action := 'auth.connection_changed';
-    end if;
     update public.account_sessions
     set last_seen_at = v_now,
         ended_at = case when p_event = 'ended' then v_now else null end,
@@ -564,23 +549,6 @@ begin
         device_description = p_device_description,
         user_agent = null
     where session_id = p_session_id;
-  end if;
-
-  if v_action is not null then
-    insert into public.activity_log (
-      actor_user_id, actor_name, actor_email, action, target_type,
-      target_label, details, session_id, connection_ip, connection_city,
-      connection_region, connection_country, connection_latitude,
-      connection_longitude, connection_accuracy_meters,
-      connection_location_captured_at, device_model,
-      device_description, connection_observed_at
-    ) values (
-      p_auth_user_id, p_actor_name, lower(p_actor_email), v_action, 'session',
-      'Sign-in session', jsonb_build_object('session', left(p_session_id::text, 8)),
-      p_session_id, p_ip_address, p_city, p_region, p_country,
-      v_latitude, v_longitude, v_accuracy_meters, v_location_captured_at,
-      null, p_device_description, v_now
-    );
   end if;
 end;
 $$;
