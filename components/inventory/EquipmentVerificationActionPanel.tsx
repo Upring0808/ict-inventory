@@ -38,32 +38,32 @@ export function EquipmentVerificationActionPanel({
   const actorInitial = actorLabel.trim().charAt(0).toUpperCase() || 'I';
   const isConfirmationPending = !confirmed && !isSaving;
   const sectionClassName =
-    'min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 ' +
+    'min-w-0 overflow-hidden rounded-2xl border border-[#cbd8ce] bg-[#f3f8f4] dark:border-slate-800 dark:bg-slate-900 ' +
     className;
 
   return (
     <section className={sectionClassName}>
-      <header className="bg-[#202d31] px-5 pb-5 pt-5 text-white dark:bg-[#152429] sm:px-6">
+      <header className="border-b border-[#bfd0c3] bg-[#dce8df] px-5 pb-5 pt-5 text-[#314538] dark:border-slate-800 dark:bg-[#152429] dark:text-white sm:px-6">
         <h2 className="text-xl font-semibold tracking-tight">Record a check-in</h2>
-        <p className="mt-1.5 text-sm leading-6 text-[#d8e2e2]">
+        <p className="mt-1.5 text-sm leading-6 text-[#465b4d] dark:text-[#d8e2e2]">
           Compare the property number, serial number, and assignment with the physical equipment.
         </p>
-        <div className="mt-5 flex min-w-0 items-center gap-3 border-t border-white/20 pt-4">
+        <div className="mt-5 flex min-w-0 items-center gap-3 border-t border-[#c1d2c6] pt-4 dark:border-white/20">
           <span
             aria-hidden="true"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#f4ad8f] text-base font-bold text-[#202d31]"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#c9decf] text-base font-bold text-[#21472f] dark:bg-[#a6c8ad] dark:text-[#173b28]"
           >
             {actorInitial}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-[#cbd8d8]">
+            <p className="text-xs font-medium text-[#49614f] dark:text-[#cbd8d8]">
               Signed in as
             </p>
-            <p className="mt-0.5 break-words text-sm font-semibold leading-5 text-white">
+            <p className="mt-0.5 break-words text-sm font-semibold leading-5 text-[#263d2c] dark:text-white">
               {actorLabel}
             </p>
             {actorName && actorEmail && (
-              <p className="mt-0.5 break-all text-xs leading-5 text-[#cbd8d8]">
+              <p className="mt-0.5 break-all text-xs leading-5 text-[#465b4d] dark:text-[#cbd8d8]">
                 {actorEmail}
               </p>
             )}
@@ -87,7 +87,7 @@ export function EquipmentVerificationActionPanel({
           maxLength={500}
           disabled={isSaving}
           placeholder="Record an observation from this check."
-          className="mt-2 min-h-24 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base leading-6 text-slate-950 caret-[#a94b35] outline-none placeholder:text-slate-500 focus:border-[#a94b35] focus:ring-2 focus:ring-[#a94b35]/20 disabled:cursor-not-allowed disabled:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:disabled:bg-slate-900"
+          className="mt-2 min-h-24 w-full resize-y rounded-lg border border-[#bacbbe] bg-white px-3 py-2.5 text-base leading-6 text-slate-950 caret-[#286544] outline-none placeholder:text-slate-500 focus:border-[#286544] focus:ring-2 focus:ring-[#286544]/20 disabled:cursor-not-allowed disabled:bg-[#f1f5f1] dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-400 dark:disabled:bg-slate-900"
         />
         <p id="verification-comment-count" className="mt-1 text-right text-xs tabular-nums text-slate-600 dark:text-slate-400">
           {verificationComment.length}/500
@@ -100,7 +100,7 @@ export function EquipmentVerificationActionPanel({
               checked={resolveActiveRemark}
               onChange={(event) => onRemarkResolutionChange(event.target.checked)}
               disabled={isSaving}
-              className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-400 text-[#a94b35] focus:ring-2 focus:ring-[#a94b35] disabled:cursor-not-allowed"
+              className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-400 text-[#286544] focus:ring-2 focus:ring-[#286544] disabled:cursor-not-allowed"
             />
             <span>
               <span className="block font-semibold">Resolve the maintenance note</span>
@@ -113,15 +113,15 @@ export function EquipmentVerificationActionPanel({
 
         <label className={'mt-5 flex min-h-14 cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-sm leading-5 text-slate-950 transition-colors dark:text-slate-100 ' +
           (confirmed
-            ? 'border-[#d9a38f] bg-[#fff3ed] hover:bg-[#ffebe1] dark:border-[#845342] dark:bg-[#3a2b29] dark:hover:bg-[#49332f]'
-            : 'border-slate-300 bg-[#f7f7f5] hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800')}
+            ? 'border-[#a9c8b1] bg-[#e7f0e8] hover:bg-[#dcebdd] dark:border-[#477654] dark:bg-[#20372b] dark:hover:bg-[#284334]'
+            : 'border-[#c8d5ca] bg-[#f5f8f5] hover:bg-[#edf4ee] dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800')}
         >
           <input
             type="checkbox"
             checked={confirmed}
             onChange={(event) => onConfirmationChange(event.target.checked)}
             disabled={isSaving}
-            className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-400 text-[#a94b35] focus:ring-2 focus:ring-[#a94b35] disabled:cursor-not-allowed"
+            className="mt-0.5 h-5 w-5 shrink-0 rounded border-slate-400 text-[#286544] focus:ring-2 focus:ring-[#286544] disabled:cursor-not-allowed"
           />
           <span>I inspected the physical equipment and confirm this record is accurate.</span>
         </label>
@@ -129,10 +129,10 @@ export function EquipmentVerificationActionPanel({
         <button
           type="submit"
           disabled={!confirmed || isSaving}
-          className={'mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a94b35] focus-visible:ring-offset-2 disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-900 ' +
+          className={'mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#286544] focus-visible:ring-offset-2 disabled:cursor-not-allowed dark:focus-visible:ring-offset-slate-900 ' +
             (isConfirmationPending
-              ? 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-              : 'bg-[#202d31] text-white hover:bg-[#33474b] active:bg-[#111e22] dark:bg-[#365157] dark:hover:bg-[#48656b]')}
+              ? 'bg-[#dfe9e1] text-[#55665a] dark:bg-slate-800 dark:text-slate-400'
+              : 'bg-[#245a40] text-white hover:bg-[#1e4e37] active:bg-[#163c2a] dark:bg-[#365157] dark:hover:bg-[#48656b]')}
         >
           {isSaving ? (
             <>

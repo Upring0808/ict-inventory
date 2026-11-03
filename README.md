@@ -71,6 +71,16 @@ For Google sign-in on Android Chrome, begin and finish the flow in the same Chro
 
 Add the Supabase settings to the hosting environment, including Production and any Preview environment that should connect to Supabase. Google redirect URLs must include the deployed `/auth/callback` URL.
 
+## Keep a Free Supabase project active
+
+Supabase may pause Free projects after a week with too little database activity. This repository includes a GitHub Actions heartbeat that calls a read-only RPC three times a day. The RPC returns only `true`; it does not read or change inventory data, and it does not change the inventory table's RLS policies.
+
+1. Apply the updated [`lib/supabase/schema.sql`](lib/supabase/schema.sql) in the Supabase SQL Editor (or use `/supabase-schema.sql`) so the `keepalive` RPC exists.
+2. In the GitHub repository, open **Settings → Secrets and variables → Actions** and add `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` using the values from Supabase **Project Settings → API**.
+3. Make sure GitHub Actions are enabled. The scheduled workflow runs every eight hours; you can also run it manually from **Actions → Keep Supabase Active → Run workflow** after adding the secrets.
+
+Supabase describes a few API requests per day as usually enough, but this cannot guarantee a project will never pause. Only paid Supabase projects are exempt from inactivity pausing.
+
 ## Access and accountability
 
 - `/` is the authorized dashboard. Unauthenticated users see the sign-in screen.

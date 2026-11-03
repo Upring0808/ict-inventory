@@ -1022,4 +1022,17 @@ $$;
 revoke all on function public.consume_security_rate_limit(text, integer, integer) from public, anon, authenticated;
 grant execute on function public.consume_security_rate_limit(text, integer, integer) to service_role;
 
+-- Harmless public RPC used by the scheduled GitHub Actions heartbeat. It only
+-- returns a constant and does not read or expose inventory data.
+create or replace function public.keepalive()
+returns boolean
+language sql
+security invoker
+set search_path = ''
+as $$
+  select true;
+$$;
+revoke all on function public.keepalive() from public, anon, authenticated;
+grant execute on function public.keepalive() to anon;
+
 notify pgrst, 'reload schema';

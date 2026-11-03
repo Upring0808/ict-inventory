@@ -1,0 +1,39 @@
+name: Keep Supabase Active
+
+on:
+  schedule:
+    - cron: '17 */8 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the keepalive RPC
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_PUBLISHABLE_KEY" ]]; then
+            echo "Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in GitHub Actions secrets."
+            exit 1
+          fi
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 3 \
+            --retry-all-errors \
+            --max-time 30 \
+            --request POST \
+            --header "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            --output /dev/null \
+            --write-out 'Supabase keepalive returned HTTP %{http_code}\n' \
+            "${SUPABASE_URL%/}/rest/v1/rpc/keepalive"
