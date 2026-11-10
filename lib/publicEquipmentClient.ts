@@ -62,6 +62,9 @@ export async function findPublicEquipment(propertyNumber: string): Promise<Publi
     typeof result.equipmentType !== 'string' ||
     typeof result.brand !== 'string' ||
     typeof result.model !== 'string' ||
+    typeof result.serialNumber !== 'string' ||
+    typeof result.accountablePersonnel !== 'string' ||
+    typeof result.location !== 'string' ||
     typeof result.statusCategory !== 'string' ||
     (result.yearAcquired !== undefined && typeof result.yearAcquired !== 'string')
   ) {
@@ -73,6 +76,9 @@ export async function findPublicEquipment(propertyNumber: string): Promise<Publi
     equipmentType: result.equipmentType,
     brand: result.brand,
     model: result.model,
+    serialNumber: result.serialNumber,
+    accountablePersonnel: result.accountablePersonnel,
+    location: result.location,
     statusCategory: result.statusCategory as InventoryItem['statusCategory'],
     yearAcquired: result.yearAcquired as string | undefined,
   };

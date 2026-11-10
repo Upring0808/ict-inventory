@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await createAdminClient()
       .from('equipment')
-      .select('property_number,equipment_type,brand,model,status_category,year_acquired')
+      .select('property_number,equipment_type,brand,model,serial_number,accountable_personnel,location,status_category,year_acquired')
       .eq('property_number', propertyNumber)
       .maybeSingle();
 

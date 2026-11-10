@@ -21,7 +21,7 @@ The application now contains only fictional examples in the sample file, never s
 ## Remaining operational checks
 
 - The SQL migration and Auth settings must be applied and verified in the actual Supabase project; source review and local build cannot prove production policy state.
-- The public QR label embeds the property number. If even that identifier is confidential, migrate future labels to opaque random references and retire old labels. Public registration checks are throttled, but a determined distributed caller can still probe identifiers over time.
+- Public QR verification exposes the property number, equipment type, brand, model, serial number, current accountable person and office, condition, and acquisition year. Anyone who can scan or query a label can see those fields; maintenance remarks, verification history, and full records stay private. Public lookups are throttled, but a determined distributed caller can still probe identifiers over time.
 - Supabase Auth endpoints are directly reachable with the publishable key. App-level login throttling supplements Supabase's own limits and edge protections; it cannot replace them.
 - Password/email notifications depend on Supabase security-notification settings and working SMTP. Test delivery to both account holders after configuration.
 - Supabase's security notification delivery still depends on project settings and SMTP. The source change cannot prove that messages reach recipients; verify delivery in staging before production rollout.

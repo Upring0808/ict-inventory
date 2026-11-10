@@ -29,17 +29,17 @@ const input = loadPureTypescript('lib/security/input.ts');
 const qr = loadPureTypescript('lib/qrEquipment.ts');
 const tokenClaims = loadPureTypescript('lib/security/tokenClaims.ts');
 
-test('public QR projection includes equipment details without confidential fields', () => {
+test('public QR projection includes identification and current custody without notes or audit history', () => {
   const row = {
     property_number: 'EXAMPLE-QR-001',
     equipment_type: 'Laptop Computers',
     brand: 'Example Brand',
     model: 'Example Model',
+    serial_number: 'SERIAL-001',
+    accountable_personnel: 'Current Custodian',
+    location: 'Main Office',
     status_category: 'Serviceable',
     year_acquired: 2023,
-    serial_number: 'SECRET-SERIAL',
-    accountable_personnel: 'Private Person',
-    location: 'Private Office',
     remarks: 'Private maintenance note',
     verification_history: [{ verifiedBy: 'Private Person' }],
   };
@@ -50,6 +50,9 @@ test('public QR projection includes equipment details without confidential field
     equipmentType: 'Laptop Computers',
     brand: 'Example Brand',
     model: 'Example Model',
+    serialNumber: 'SERIAL-001',
+    accountablePersonnel: 'Current Custodian',
+    location: 'Main Office',
     statusCategory: 'Serviceable',
     yearAcquired: '2023',
   }));

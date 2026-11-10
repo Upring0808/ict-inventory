@@ -1,12 +1,15 @@
 import type { EquipmentStatusCategory } from '@/types/inventory';
 
-/** Public QR details. Serial numbers, custody, notes, and audit data remain private. */
+/** Public QR details are limited to equipment identification and current custody. */
 export interface PublicEquipmentSummary {
   propertyNumber: string;
   registered: true;
   equipmentType: string;
   brand: string;
   model: string;
+  serialNumber: string;
+  accountablePersonnel: string;
+  location: string;
   statusCategory: EquipmentStatusCategory;
   yearAcquired?: string;
 }
@@ -20,6 +23,9 @@ export function publicEquipmentSummary(row: {
   equipment_type: string;
   brand: string;
   model: string;
+  serial_number: string | null;
+  accountable_personnel: string;
+  location: string;
   status_category: string;
   year_acquired: string | number | null;
 }): PublicEquipmentSummary {
@@ -29,6 +35,9 @@ export function publicEquipmentSummary(row: {
     equipmentType: row.equipment_type,
     brand: row.brand,
     model: row.model,
+    serialNumber: row.serial_number || '',
+    accountablePersonnel: row.accountable_personnel,
+    location: row.location,
     statusCategory: row.status_category as EquipmentStatusCategory,
     ...(row.year_acquired ? { yearAcquired: String(row.year_acquired) } : {}),
   };

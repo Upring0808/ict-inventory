@@ -60,11 +60,20 @@ export function EquipmentVerificationSummary({
       </div>
 
       {isPublic ? (
-        <dl className="grid grid-cols-2 divide-x divide-[#d8e2da] bg-white dark:divide-slate-800 dark:bg-slate-900">
-          <div className="min-w-0 px-5 py-4 sm:px-6">
+        <dl className="grid grid-cols-1 divide-y divide-[#d8e2da] bg-white dark:divide-slate-800 dark:bg-slate-900 sm:grid-cols-2 sm:divide-y-0">
+          <div className="min-w-0 px-5 py-3.5 sm:border-b sm:border-r sm:border-[#d8e2da] sm:px-6 dark:sm:border-slate-800">
+            <EquipmentVerificationField label="Accountable person" value={item.accountablePersonnel} />
+          </div>
+          <div className="min-w-0 px-5 py-3.5 sm:border-b sm:border-[#d8e2da] sm:px-6 dark:sm:border-slate-800">
+            <EquipmentVerificationField label="Office / division" value={item.location} />
+          </div>
+          <div className="min-w-0 px-5 py-3.5 sm:border-r sm:border-[#d8e2da] sm:px-6 dark:sm:border-slate-800">
+            <EquipmentVerificationField label="Serial number" value={item.serialNumber} monospace />
+          </div>
+          <div className="min-w-0 px-5 py-3.5 sm:px-6">
             <EquipmentVerificationField label="Condition" value={item.statusCategory} />
           </div>
-          <div className="min-w-0 px-5 py-4 sm:px-6">
+          <div className="min-w-0 px-5 py-3.5 sm:border-r sm:border-[#d8e2da] sm:px-6 dark:sm:border-slate-800">
             <EquipmentVerificationField label="Year acquired" value={getEquipmentYear(item)} />
           </div>
         </dl>
