@@ -19,7 +19,7 @@ import { calculateSummary } from '@/lib/summaryUtils';
 import { exportInventoryToWorkbook } from '@/lib/exportUtils';
 
 import { Sidebar, SidebarTab } from '@/components/layout/Sidebar';
-import { TopHeader } from '@/components/layout/TopHeader';
+import { TopHeader, type PrintSelection } from '@/components/layout/TopHeader';
 import { OverviewView } from '@/components/inventory/OverviewView';
 import { FilterBar } from '@/components/inventory/FilterBar';
 import { EquipmentTable } from '@/components/inventory/EquipmentTable';
@@ -86,6 +86,7 @@ function InventoryDashboardContent() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [printGeneratedAt, setPrintGeneratedAt] = useState<Date | null>(null);
+  const [printSelection, setPrintSelection] = useState<PrintSelection>('all');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -168,6 +169,7 @@ function InventoryDashboardContent() {
 
   const reportScope = useMemo(() => {
     const details: string[] = [];
+    if (printSelection !== 'all') details.push('Print selection: ' + printSelection + ' only');
     const search = filters.searchQuery.trim();
     if (search) details.push('Search: “' + search + '”');
     if (filters.type) details.push('Type: ' + filters.type);
@@ -186,7 +188,7 @@ function InventoryDashboardContent() {
     return details.length
       ? 'Filtered dashboard results · ' + details.join(' · ')
       : 'All inventory records';
-  }, [filters]);
+  }, [filters, printSelection]);
 
   useEffect(() => {
     if (!printGeneratedAt) return;
@@ -330,6 +332,12 @@ function InventoryDashboardContent() {
     });
   }, [items, filters, currentTab]);
 
+  const printItems = useMemo(() => {
+    return printSelection === 'all'
+      ? filteredItems
+      : filteredItems.filter((item) => item.equipmentType === printSelection);
+  }, [filteredItems, printSelection]);
+
   // CRUD Handlers
   const handleSaveItem = async (
     itemData: Omit<InventoryItem, 'id' | 'createdAt'>,
@@ -443,9 +451,13 @@ function InventoryDashboardContent() {
     }
   };
 
-  const handlePrintReport = () => {
+  const handlePrintReport = (selection: PrintSelection) => {
+    setPrintSelection(selection);
     setPrintGeneratedAt(new Date());
-    showToast('Preparing print report · ' + filteredItems.length.toLocaleString() + ' filtered assets');
+    const selectedItems = selection === 'all'
+      ? filteredItems
+      : filteredItems.filter((item) => item.equipmentType === selection);
+    showToast('Preparing print report · ' + selectedItems.length.toLocaleString() + ' assets');
   };
 
   return (
@@ -675,7 +687,7 @@ function InventoryDashboardContent() {
 
     </div>
     <PrintReport
-      items={filteredItems}
+      items={printItems}
       scope={reportScope}
       generatedAt={printGeneratedAt}
     />

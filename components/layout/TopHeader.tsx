@@ -4,6 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AppBrand } from '@/components/branding/AppBrand';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useTheme } from '@/components/theme/ThemeProvider';
+import type { EquipmentType } from '@/types/inventory';
+
+export type PrintSelection = 'all' | EquipmentType;
 
 interface TopHeaderProps {
   onOpenMobileMenu: () => void;
@@ -11,7 +14,7 @@ interface TopHeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onExportWorkbook: () => void;
-  onPrintReport: () => void;
+  onPrintReport: (selection: PrintSelection) => void;
   totalItems: number;
   filteredItemCount: number;
   isInventoryLoading?: boolean;
@@ -292,31 +295,41 @@ export function TopHeader({
                   </span>
                 </span>
               </button>
-              <button
-                type="button"
-                disabled={isInventoryLoading || isExporting}
-                onClick={() => {
-                  setIsExportMenuOpen(false);
-                  exportTriggerRef.current?.focus();
-                  onPrintReport();
-                }}
-                className="flex min-h-16 w-full items-start gap-3 rounded-xl p-3 text-left transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-blue-950/30"
-              >
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
-                  <svg className="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v4a2 2 0 0 1-2 2h-2m-10-3h10v6H7v-6Zm11-4h.01" />
-                  </svg>
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Print report</span>
-                    <span className="shrink-0 rounded-md bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-800 dark:bg-blue-950/50 dark:text-blue-300">A4</span>
-                  </span>
-                  <span className="mt-1 block text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">
-                    Current filtered results · summary and asset register
-                  </span>
-                </span>
-              </button>
+              <div className="rounded-xl border border-zinc-100 p-3 dark:border-zinc-800">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Print report</span>
+                  <span className="shrink-0 rounded-md bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-blue-800 dark:bg-blue-950/50 dark:text-blue-300">A4</span>
+                </div>
+                <p className="mt-1 text-[10px] leading-4 text-zinc-500 dark:text-zinc-400">
+                  Choose what to include. Current filters still apply.
+                </p>
+                <div className="mt-2 grid gap-1" role="group" aria-label="Choose equipment for print report">
+                  {([
+                    ['all', 'All equipment'],
+                    ['Desktop Computers', 'Desktop computers only'],
+                    ['Laptop Computers', 'Laptop computers only'],
+                    ['Printers', 'Printers only'],
+                    ['Scanners', 'Scanners only'],
+                  ] as const).map(([selection, label]) => (
+                    <button
+                      key={selection}
+                      type="button"
+                      disabled={isInventoryLoading || isExporting}
+                      onClick={() => {
+                        setIsExportMenuOpen(false);
+                        exportTriggerRef.current?.focus();
+                        onPrintReport(selection);
+                      }}
+                      className="flex min-h-9 items-center justify-between rounded-lg px-2.5 text-left text-xs font-medium text-zinc-700 transition hover:bg-blue-50 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-zinc-200 dark:hover:bg-blue-950/30 dark:hover:text-blue-100"
+                    >
+                      <span>{label}</span>
+                      <svg className="h-3.5 w-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17 17 7M8 7h9v9" />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>}
 
